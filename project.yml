@@ -36,12 +36,11 @@ targets:
         # WEB: el mismo cliente del sitio (VITE_GOOGLE_CLIENT_ID); el token se
         # pide para el. Es un identificador publico, no un secreto.
         GOOGLE_WEB_CLIENT_ID: 332763626893-1enqr4povcc0nda0l19n1qlnqapp1gmu.apps.googleusercontent.com
-        # iOS: se crea en Google Cloud (Credenciales > ID de cliente de OAuth >
-        # iOS, con el paquete app.ventas365). Reemplazar los dos valores:
-        #   GOOGLE_IOS_CLIENT_ID      = <id>.apps.googleusercontent.com
-        #   GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.<id>
-        GOOGLE_IOS_CLIENT_ID: PENDIENTE.apps.googleusercontent.com
-        GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.PENDIENTE
+        # iOS: cliente de tipo iOS de Google Cloud para el paquete app.ventas365.
+        # El segundo valor es el mismo ID al reves; va como esquema de URL para
+        # que Google pueda volver a la app.
+        GOOGLE_IOS_CLIENT_ID: 332763626893-tnp4ee8dglsrtju8oe0thdhofeplia7d.apps.googleusercontent.com
+        GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.332763626893-tnp4ee8dglsrtju8oe0thdhofeplia7d
     info:
       path: Ventas365/Info.plist
       properties:
