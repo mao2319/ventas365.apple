@@ -1,6 +1,7 @@
 # Compila la app en un Mac de GitHub con cada push. Sin firma: valida que el
-# proyecto compila y deja la app de simulador como artefacto. La firma y la
-# subida a TestFlight se agregan cuando exista la cuenta de Apple Developer.
+# proyecto compila y deja como artefactos la app de simulador y un .ipa para
+# iPhone. La firma y la subida a TestFlight se agregan cuando exista la
+# cuenta de Apple Developer.
 name: Compilar iOS
 
 on:
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Compilar para simulador
+    name: Compilar sin firma
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -30,7 +31,7 @@ jobs:
       - name: Versión de Xcode
         run: xcodebuild -version
 
-      - name: Compilar
+      - name: Compilar para simulador
         run: |
           set -o pipefail
           xcodebuild build \
@@ -54,10 +55,31 @@ jobs:
           path: Ventas365-simulador.zip
           retention-days: 14
 
-      - name: Guardar el registro si falla
+      # App para iPhone real, sin firma: sirve para instalarla en un iPhone
+      # propio con una herramienta que la firme con un Apple ID (p. ej.
+      # Sideloadly), mientras no haya cuenta de Apple Developer.
+      - name: Compilar para iPhone (sin firma)
+        run: |
+          set -o pipefail
+          xcodebuild build             -project Ventas365.xcodeproj             -scheme Ventas365             -configuration Release             -destination 'generic/platform=iOS'             -derivedDataPath build-device             CODE_SIGNING_ALLOWED=NO             2>&1 | tee xcodebuild-device.log | xcbeautify --renderer github-actions
+
+      - name: Empaquetar el .ipa sin firma
+        run: |
+          mkdir Payload
+          cp -R build-device/Build/Products/Release-iphoneos/Ventas365.app Payload/
+          zip -qr Ventas365-sin-firma.ipa Payload
+
+      - name: Guardar el .ipa sin firma
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ventas365-iphone-sin-firma
+          path: Ventas365-sin-firma.ipa
+          retention-days: 14
+
+      - name: Guardar los registros si falla
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-log
-          path: xcodebuild.log
+          path: xcodebuild*.log
           retention-days: 7
