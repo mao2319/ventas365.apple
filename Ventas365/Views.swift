@@ -21,10 +21,13 @@ struct SplashView: View {
 
 /// Inicio de la app: las dos formas de usar Ventas365.
 struct HomeView: View {
+    let language: AppLanguage
+    let onLanguage: (AppLanguage) -> Void
     let onOpen: (AppSection) -> Void
 
     var body: some View {
-        ZStack {
+        let strings = language.strings
+        ZStack(alignment: .topTrailing) {
             Color.paper.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 0) {
@@ -36,10 +39,10 @@ struct HomeView: View {
                         .font(.system(size: 32, weight: .heavy))
                         .foregroundColor(.ink)
                         .padding(.top, 16)
-                    Text("Abierto todos los días del año")
+                    Text(strings.tagline)
                         .font(.system(size: 15))
                         .foregroundColor(.inkMuted)
-                    Text("¿Qué quieres hacer hoy?")
+                    Text(strings.question)
                         .font(.system(size: 17, weight: .bold))
                         .foregroundColor(.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -47,13 +50,15 @@ struct HomeView: View {
                         .padding(.bottom, 12)
                     SectionCard(
                         title: "Market",
-                        description: "Compra en las tiendas cerca de ti y pide a domicilio o para recoger.",
+                        description: strings.marketDescription,
+                        openLabel: strings.open,
                         systemImage: "bag",
                         accent: .brandOrange
                     ) { onOpen(.market) }
                     SectionCard(
-                        title: "Negocios",
-                        description: "Administra tu tienda: ventas, inventario, caja y pedidos.",
+                        title: strings.businessTitle,
+                        description: strings.businessDescription,
+                        openLabel: strings.open,
                         systemImage: "building.2",
                         accent: .brandViolet
                     ) { onOpen(.negocios) }
@@ -61,16 +66,50 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: 480)
                 .padding(.horizontal, 24)
-                .padding(.vertical, 48)
+                .padding(.vertical, 64)
                 .frame(maxWidth: .infinity)
             }
+            LanguageToggle(current: language, label: strings.language, onSelect: onLanguage)
+                .padding(.top, 8)
+                .padding(.trailing, 16)
         }
+    }
+}
+
+/// Selector de idioma del inicio: los dos idiomas a la vista, el actual resaltado.
+private struct LanguageToggle: View {
+    let current: AppLanguage
+    let label: String
+    let onSelect: (AppLanguage) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(AppLanguage.allCases) { language in
+                let selected = language == current
+                Button { onSelect(language) } label: {
+                    Text(language.rawValue.uppercased())
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(selected ? .white : .inkMuted)
+                        .frame(minWidth: 48, minHeight: 40)
+                        .background(Capsule().fill(selected ? Color.ink : Color.clear))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(language.label)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.white))
+        .overlay(Capsule().stroke(Color.ink.opacity(0.14), lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
     }
 }
 
 private struct SectionCard: View {
     let title: String
     let description: String
+    let openLabel: String
     let systemImage: String
     let accent: Color
     let action: () -> Void
@@ -102,7 +141,7 @@ private struct SectionCard: View {
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(accent.opacity(0.35), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Abrir \(title)")
+        .accessibilityLabel("\(openLabel) \(title)")
     }
 }
 
@@ -114,18 +153,19 @@ struct WebScreen: View {
     let onExit: () -> Void
 
     var body: some View {
+        let strings = web.language.strings
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                barButton("chevron.left", label: "Atrás") { if !web.goBack() { onExit() } }
-                barButton("house", label: "Inicio de la app", action: onExit)
+                barButton("chevron.left", label: strings.back) { if !web.goBack() { onExit() } }
+                barButton("house", label: strings.appHome, action: onExit)
                 Spacer()
-                Text(section.title)
+                Text(section.title(strings))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.ink)
                 Spacer()
                 // Mismo ancho que los dos botones de la izquierda, para centrar el título.
                 Color.clear.frame(width: 44, height: 44)
-                barButton("arrow.clockwise", label: "Recargar") { web.reload() }
+                barButton("arrow.clockwise", label: strings.reload) { web.reload() }
             }
             .padding(.horizontal, 6)
             .background(Color.white)
@@ -143,7 +183,7 @@ struct WebScreen: View {
             ZStack {
                 WebViewContainer(webView: web.webView)
                 if web.failed {
-                    OfflineView(onRetry: { web.reload() }, onHome: onExit)
+                    OfflineView(strings: strings, onRetry: { web.reload() }, onHome: onExit)
                 }
             }
         }
@@ -164,6 +204,7 @@ struct WebScreen: View {
 
 /// Cuando el sitio no carga: en vez de una página en blanco.
 struct OfflineView: View {
+    let strings: AppStrings
     let onRetry: () -> Void
     let onHome: () -> Void
 
@@ -173,20 +214,20 @@ struct OfflineView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
-            Text("No pudimos conectarnos")
+            Text(strings.offlineTitle)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.ink)
                 .padding(.top, 20)
-            Text("Revisa tu conexión a internet e inténtalo de nuevo.")
+            Text(strings.offlineBody)
                 .font(.system(size: 15))
                 .foregroundColor(.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.top, 6)
-            Button("Reintentar", action: onRetry)
+            Button(strings.retry, action: onRetry)
                 .buttonStyle(.borderedProminent)
                 .tint(.brandViolet)
                 .padding(.top, 24)
-            Button("Volver al inicio", action: onHome)
+            Button(strings.backHome, action: onHome)
                 .foregroundColor(.brandViolet)
                 .padding(.top, 12)
         }

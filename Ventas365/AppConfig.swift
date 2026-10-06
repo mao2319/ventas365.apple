@@ -6,7 +6,7 @@ enum AppSection: String {
     case negocios
 
     var path: String { self == .market ? "/" : "/negocios" }
-    var title: String { self == .market ? "Market" : "Negocios" }
+    func title(_ strings: AppStrings) -> String { self == .market ? "Market" : strings.businessTitle }
 }
 
 enum AppConfig {
@@ -26,7 +26,15 @@ enum AppConfig {
         return !clientID.isEmpty && !clientID.contains("PENDIENTE")
     }
 
-    static func url(for section: AppSection) -> URL {
-        URL(string: section.path, relativeTo: baseURL)!.absoluteURL
+    /// El idioma va en la ruta (/en) y además en ?idioma=, que le dice al
+    /// sitio que esa es la elección de la persona (reemplaza la que tuviera
+    /// guardada).
+    static func url(for section: AppSection, language: AppLanguage) -> URL {
+        var path = language.urlPrefix + section.path
+        if path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        components.path = path
+        components.queryItems = [URLQueryItem(name: "idioma", value: language.rawValue)]
+        return components.url!
     }
 }

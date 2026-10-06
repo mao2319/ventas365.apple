@@ -12,10 +12,13 @@ final class WebStore: NSObject, ObservableObject {
     @Published var isLoading = false
     /// La página principal no cargó (sin conexión, sitio caído).
     @Published var failed = false
+    /// Idioma elegido: en el inicio de la app o en el encabezado del sitio.
+    @Published private(set) var language = AppLanguage.stored()
 
     let webView: WKWebView
 
     private var section: AppSection?
+    private var loadedLanguage: AppLanguage?
     // Pagos (Wompi): el checkout salta por páginas del banco y vuelve al
     // sitio. Todo ese recorrido se queda aquí adentro para no perder la sesión.
     private var inPaymentFlow = false
@@ -40,12 +43,20 @@ final class WebStore: NSObject, ObservableObject {
         webView.allowsBackForwardNavigationGestures = true
     }
 
-    /// Abre la sección; si ya estaba abierta, se queda donde el usuario la dejó.
+    func select(_ newLanguage: AppLanguage) {
+        guard newLanguage != language else { return }
+        language = newLanguage
+        newLanguage.save()
+    }
+
+    /// Abre la sección; si ya estaba abierta en ese idioma, se queda donde el
+    /// usuario la dejó.
     func open(_ target: AppSection) {
-        if section == target && !failed { return }
+        if section == target && loadedLanguage == language && !failed { return }
         section = target
+        loadedLanguage = language
         failed = false
-        webView.load(URLRequest(url: AppConfig.url(for: target)))
+        webView.load(URLRequest(url: AppConfig.url(for: target, language: language)))
     }
 
     /// - Returns: false si ya no hay a dónde retroceder dentro del sitio.
@@ -58,7 +69,7 @@ final class WebStore: NSObject, ObservableObject {
     func reload() {
         failed = false
         if webView.url == nil, let section {
-            webView.load(URLRequest(url: AppConfig.url(for: section)))
+            webView.load(URLRequest(url: AppConfig.url(for: section, language: language)))
         } else {
             webView.reload()
         }
@@ -157,6 +168,13 @@ extension WebStore: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isLoading = false
+        // El selector de idioma del sitio recarga en la otra dirección (/en
+        // o sin prefijo): la app toma ese idioma como el elegido.
+        if let url = webView.url, isSite(url), !failed {
+            let shown = AppLanguage.fromPath(url.path)
+            loadedLanguage = shown
+            select(shown)
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

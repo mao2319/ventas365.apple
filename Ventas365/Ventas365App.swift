@@ -26,7 +26,7 @@ struct RootView: View {
             if let section {
                 WebScreen(web: web, section: section, onExit: { self.section = nil })
             } else {
-                HomeView(onOpen: { section = $0 })
+                HomeView(language: web.language, onLanguage: web.select, onOpen: { section = $0 })
             }
             if showSplash {
                 SplashView().transition(.opacity)
