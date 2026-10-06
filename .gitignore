@@ -1,0 +1,19 @@
+# Generados por XcodeGen (ver project.yml)
+*.xcodeproj
+Ventas365/Info.plist
+
+# Xcode / compilación
+build/
+DerivedData/
+xcuserdata/
+*.xcworkspace
+.swiftpm/
+Package.resolved
+
+# Firma: nunca en el repositorio
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+
+.DS_Store

@@ -1,0 +1,68 @@
+# Proyecto de Xcode generado con XcodeGen: el .xcodeproj y el Info.plist no se
+# guardan en el repositorio, se crean con `xcodegen generate` (en GitHub
+# Actions o en un Mac). Asi el proyecto se puede mantener sin abrir Xcode.
+name: Ventas365
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 8.0.0
+targets:
+  Ventas365:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ventas365
+        excludes:
+          - Info.plist
+    scheme: {}
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.ventas365
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.9"
+        # Solo iPhone (en iPad corre en modo compatibilidad).
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Inicio de sesion con Google.
+        # WEB: el mismo cliente del sitio (VITE_GOOGLE_CLIENT_ID); el token se
+        # pide para el. Es un identificador publico, no un secreto.
+        GOOGLE_WEB_CLIENT_ID: 332763626893-1enqr4povcc0nda0l19n1qlnqapp1gmu.apps.googleusercontent.com
+        # iOS: se crea en Google Cloud (Credenciales > ID de cliente de OAuth >
+        # iOS, con el paquete app.ventas365). Reemplazar los dos valores:
+        #   GOOGLE_IOS_CLIENT_ID      = <id>.apps.googleusercontent.com
+        #   GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.<id>
+        GOOGLE_IOS_CLIENT_ID: PENDIENTE.apps.googleusercontent.com
+        GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.PENDIENTE
+    info:
+      path: Ventas365/Info.plist
+      properties:
+        CFBundleDisplayName: Ventas365
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSCameraUsageDescription: Ventas365 usa la camara para escanear codigos de barras y tomar fotos de tus productos.
+        NSLocationWhenInUseUsageDescription: Ventas365 usa tu ubicacion para mostrarte las tiendas cerca de ti y ubicar tu tienda en el mapa.
+        NSPhotoLibraryUsageDescription: Ventas365 usa tus fotos para que puedas subir imagenes de tus productos y de tu perfil.
+        GIDClientID: $(GOOGLE_IOS_CLIENT_ID)
+        GIDServerClientID: $(GOOGLE_WEB_CLIENT_ID)
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - $(GOOGLE_REVERSED_CLIENT_ID)
