@@ -1,3 +1,4 @@
+import AuthenticationServices
 import GoogleSignIn
 import SwiftUI
 import UIKit
@@ -126,6 +127,18 @@ final class WebStore: NSObject, ObservableObject {
         }
     }
 
+    // Iniciar sesión con Apple: hoja nativa del sistema. Al sitio le llega el
+    // token de identidad (con el correo, real u oculto de Apple) y, solo la
+    // primera vez que la persona autoriza la app, su nombre.
+    private func signInWithApple() {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+
     private static func topViewController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let window = scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
@@ -144,6 +157,7 @@ final class WebStore: NSObject, ObservableObject {
       var post = function (message) { window.webkit.messageHandlers.ventas365.postMessage(message); };
       window.Ventas365Android = {
         googleSignIn: function () { post({ action: 'googleSignIn' }); },
+        appleSignIn: function () { post({ action: 'appleSignIn' }); },
         share: function (title, text, url) {
           if (navigator.share) navigator.share({ title: title, text: text, url: url });
         }
@@ -225,7 +239,37 @@ extension WebStore: WKScriptMessageHandler {
               AppConfig.siteHosts.contains(message.frameInfo.securityOrigin.host),
               let body = message.body as? [String: Any],
               let action = body["action"] as? String else { return }
-        if action == "googleSignIn" { signInWithGoogle() }
+        switch action {
+        case "googleSignIn": signInWithGoogle()
+        case "appleSignIn": signInWithApple()
+        default: break
+        }
+    }
+}
+
+extension WebStore: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let token = String(data: tokenData, encoding: .utf8) else {
+            dispatch("ventas365-apple-error", detail: ["reason": "failed"])
+            return
+        }
+        let name = [credential.fullName?.givenName, credential.fullName?.familyName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        dispatch("ventas365-apple-credential", detail: ["credential": token, "name": name])
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+        dispatch("ventas365-apple-error", detail: ["reason": cancelled ? "cancelled" : "failed"])
+    }
+}
+
+extension WebStore: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        Self.topViewController()?.view.window ?? ASPresentationAnchor()
     }
 }
 

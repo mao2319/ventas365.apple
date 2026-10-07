@@ -18,10 +18,19 @@ targets:
       - path: Ventas365
         excludes:
           - Info.plist
+          - Ventas365.entitlements
     scheme: {}
     dependencies:
       - package: GoogleSignIn
         product: GoogleSignIn
+    # Iniciar sesion con Apple (crear tienda e ingresar). XcodeGen crea el
+    # archivo de entitlements; el App ID debe tener activada la capacidad
+    # "Sign in with Apple" en la cuenta de Apple Developer.
+    entitlements:
+      path: Ventas365/Ventas365.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.ventas365
