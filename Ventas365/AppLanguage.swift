@@ -42,6 +42,8 @@ struct AppStrings {
     let marketDescription: String
     let businessTitle: String
     let businessDescription: String
+    let couriersTitle: String
+    let couriersDescription: String
     let open: String
     let language: String
     let back: String
@@ -58,6 +60,8 @@ struct AppStrings {
         marketDescription: "Compra en las tiendas cerca de ti y pide a domicilio o para recoger.",
         businessTitle: "Negocios",
         businessDescription: "Administra tu tienda: ventas, inventario, caja y pedidos.",
+        couriersTitle: "Domicilios",
+        couriersDescription: "Reparte pedidos de las tiendas del Market y gana por cada entrega.",
         open: "Abrir",
         language: "Idioma",
         back: "Atrás",
@@ -75,6 +79,8 @@ struct AppStrings {
         marketDescription: "Shop at the stores near you and order for delivery or pickup.",
         businessTitle: "Business",
         businessDescription: "Manage your store: sales, inventory, cash and orders.",
+        couriersTitle: "Deliveries",
+        couriersDescription: "Deliver orders from Market stores and earn on every drop-off.",
         open: "Open",
         language: "Language",
         back: "Back",

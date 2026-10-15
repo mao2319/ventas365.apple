@@ -18,6 +18,9 @@ struct Ventas365App: App {
 struct RootView: View {
     // Un solo WebView para toda la vida de la app.
     @StateObject private var web = WebStore()
+    // Turno de Domicilios: se crea al abrir la app para recibir el toque en
+    // sus avisos (abre Domicilios).
+    @StateObject private var courier = CourierShift.shared
     @State private var section: AppSection?
     @State private var showSplash = true
 
@@ -35,6 +38,11 @@ struct RootView: View {
         .task {
             try? await Task.sleep(nanoseconds: splashNanoseconds)
             withAnimation(.easeOut(duration: 0.25)) { showSplash = false }
+        }
+        .onReceive(courier.$requestedSection) { requested in
+            guard let requested else { return }
+            section = requested
+            courier.requestedSection = nil
         }
         // Regreso del inicio de sesión de Google a la app.
         .onOpenURL { url in

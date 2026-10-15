@@ -160,7 +160,15 @@ final class WebStore: NSObject, ObservableObject {
         appleSignIn: function () { post({ action: 'appleSignIn' }); },
         share: function (title, text, url) {
           if (navigator.share) navigator.share({ title: title, text: text, url: url });
-        }
+        },
+        // Domicilios (ver utils/courierNative.ts en el sitio).
+        courierStart: function (token, supabaseUrl, anonKey, language) {
+          post({ action: 'courierStart', token: token, supabaseUrl: supabaseUrl, anonKey: anonKey, language: language });
+        },
+        courierStop: function () { post({ action: 'courierStop' }); },
+        keepAwake: function (on) { post({ action: 'keepAwake', on: !!on }); },
+        vibrate: function (pattern) { post({ action: 'vibrate', pattern: String(pattern || '') }); },
+        notify: function (title, body) { post({ action: 'notify', title: String(title || ''), body: String(body || '') }); }
       };
     })();
     """
@@ -242,6 +250,22 @@ extension WebStore: WKScriptMessageHandler {
         switch action {
         case "googleSignIn": signInWithGoogle()
         case "appleSignIn": signInWithApple()
+        case "courierStart":
+            if let shift = ShiftConfig(
+                token: body["token"] as? String,
+                supabaseURL: body["supabaseUrl"] as? String,
+                anonKey: body["anonKey"] as? String,
+                language: body["language"] as? String
+            ) {
+                CourierShift.shared.start(shift)
+            }
+        case "courierStop": CourierShift.shared.stop()
+        case "keepAwake": CourierShift.shared.keepAwake(body["on"] as? Bool ?? false)
+        case "vibrate": CourierShift.shared.vibrate()
+        case "notify":
+            let title = String((body["title"] as? String ?? "").prefix(120))
+            let text = String((body["body"] as? String ?? "").prefix(400))
+            if !title.isEmpty { CourierShift.shared.notify(title: title, body: text) }
         default: break
         }
     }

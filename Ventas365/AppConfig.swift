@@ -1,12 +1,26 @@
 import Foundation
 
-/// Las dos entradas de la app: cada una abre su parte del sitio.
+/// Las entradas de la app: cada una abre su parte del sitio.
 enum AppSection: String {
     case market
     case negocios
+    case domicilios
 
-    var path: String { self == .market ? "/" : "/negocios" }
-    func title(_ strings: AppStrings) -> String { self == .market ? "Market" : strings.businessTitle }
+    var path: String {
+        switch self {
+        case .market: return "/"
+        case .negocios: return "/negocios"
+        case .domicilios: return "/domicilios"
+        }
+    }
+
+    func title(_ strings: AppStrings) -> String {
+        switch self {
+        case .market: return "Market"
+        case .negocios: return strings.businessTitle
+        case .domicilios: return strings.couriersTitle
+        }
+    }
 }
 
 enum AppConfig {

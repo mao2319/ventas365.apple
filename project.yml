@@ -66,7 +66,12 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSCameraUsageDescription: Ventas365 usa la camara para escanear codigos de barras y tomar fotos de tus productos.
-        NSLocationWhenInUseUsageDescription: Ventas365 usa tu ubicacion para mostrarte las tiendas cerca de ti y ubicar tu tienda en el mapa.
+        NSLocationWhenInUseUsageDescription: Ventas365 usa tu ubicacion para mostrarte las tiendas cerca de ti, ubicar tu tienda en el mapa y, si eres domiciliario, compartir tu posicion con los pedidos que llevas mientras estas conectado.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Si eres domiciliario, Ventas365 comparte tu ubicacion con la tienda y con quien espera el pedido mientras estas conectado, aunque la app este en segundo plano.
+        # Domicilios: la ubicacion del domiciliario sigue con la app en
+        # segundo plano mientras esta conectado (indicador azul de iOS).
+        UIBackgroundModes:
+          - location
         NSPhotoLibraryUsageDescription: Ventas365 usa tus fotos para que puedas subir imagenes de tus productos y de tu perfil.
         GIDClientID: $(GOOGLE_IOS_CLIENT_ID)
         GIDServerClientID: $(GOOGLE_WEB_CLIENT_ID)

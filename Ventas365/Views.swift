@@ -4,6 +4,8 @@ import SwiftUI
 extension Color {
     static let brandViolet = Color(red: 0x6D / 255, green: 0x3F / 255, blue: 0xD1 / 255)
     static let brandOrange = Color(red: 0xFF / 255, green: 0x6A / 255, blue: 0x00 / 255)
+    /// Domicilios: verde del Market.
+    static let brandGreen = Color(red: 0x1A / 255, green: 0x7F / 255, blue: 0x4B / 255)
     static let ink = Color(red: 0x1C / 255, green: 0x17 / 255, blue: 0x30 / 255)
     static let inkMuted = Color(red: 0x6B / 255, green: 0x67 / 255, blue: 0x76 / 255)
     static let paper = Color(red: 0xF6 / 255, green: 0xF4 / 255, blue: 0xF1 / 255)
@@ -19,7 +21,7 @@ struct SplashView: View {
     }
 }
 
-/// Inicio de la app: las dos formas de usar Ventas365.
+/// Inicio de la app: las formas de usar Ventas365 (comprar, vender, repartir).
 struct HomeView: View {
     let language: AppLanguage
     let onLanguage: (AppLanguage) -> Void
@@ -62,6 +64,14 @@ struct HomeView: View {
                         systemImage: "building.2",
                         accent: .brandViolet
                     ) { onOpen(.negocios) }
+                    .padding(.top, 14)
+                    SectionCard(
+                        title: strings.couriersTitle,
+                        description: strings.couriersDescription,
+                        openLabel: strings.open,
+                        systemImage: "scooter",
+                        accent: .brandGreen
+                    ) { onOpen(.domicilios) }
                     .padding(.top, 14)
                 }
                 .frame(maxWidth: 480)
