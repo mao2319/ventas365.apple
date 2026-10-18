@@ -44,7 +44,11 @@ enum AppConfig {
     /// sitio que esa es la elección de la persona (reemplaza la que tuviera
     /// guardada).
     static func url(for section: AppSection, language: AppLanguage) -> URL {
-        var path = language.urlPrefix + section.path
+        url(path: section.path, language: language)
+    }
+
+    static func url(path sitePath: String, language: AppLanguage) -> URL {
+        var path = language.urlPrefix + sitePath
         if path.count > 1, path.hasSuffix("/") { path.removeLast() }
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.path = path

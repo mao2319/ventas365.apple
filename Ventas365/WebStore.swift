@@ -52,6 +52,14 @@ final class WebStore: NSObject, ObservableObject {
 
     /// Abre la sección; si ya estaba abierta en ese idioma, se queda donde el
     /// usuario la dejó.
+    /// Abre una página concreta del sitio (p. ej. la tienda desde el Market nativo).
+    func openPath(_ path: String) {
+        section = nil
+        loadedLanguage = language
+        failed = false
+        webView.load(URLRequest(url: AppConfig.url(path: path, language: language)))
+    }
+
     func open(_ target: AppSection) {
         if section == target && loadedLanguage == language && !failed { return }
         section = target

@@ -22,11 +22,23 @@ struct RootView: View {
     // sus avisos (abre Domicilios).
     @StateObject private var courier = CourierShift.shared
     @State private var section: AppSection?
+    // Market nativo: página del sitio a la que se pasó (pedido y pago).
+    @State private var marketWebPath: String?
     @State private var showSplash = true
 
     var body: some View {
         ZStack {
-            if let section {
+            if section == .market, let path = marketWebPath {
+                // Pedido y pago de una tienda: por ahora en el sitio; "atrás"
+                // vuelve al Market nativo.
+                WebScreen(web: web, section: .market, path: path, onExit: { marketWebPath = nil })
+            } else if section == .market {
+                MarketScreen(
+                    language: web.language,
+                    onExit: { section = nil },
+                    onOpenWeb: { marketWebPath = $0 }
+                )
+            } else if let section {
                 WebScreen(web: web, section: section, onExit: { self.section = nil })
             } else {
                 HomeView(language: web.language, onLanguage: web.select, onOpen: { section = $0 })

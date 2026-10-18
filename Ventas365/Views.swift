@@ -160,6 +160,8 @@ private struct SectionCard: View {
 struct WebScreen: View {
     @ObservedObject var web: WebStore
     let section: AppSection
+    /// Si se indica, abre esa página del sitio en lugar de la sección.
+    var path: String?
     let onExit: () -> Void
 
     var body: some View {
@@ -198,7 +200,9 @@ struct WebScreen: View {
             }
         }
         .background(Color.white.ignoresSafeArea())
-        .onAppear { web.open(section) }
+        .onAppear {
+            if let path { web.openPath(path) } else { web.open(section) }
+        }
     }
 
     private func barButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
