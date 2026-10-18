@@ -26,6 +26,16 @@ struct HubText {
     var hello: String { pick("Hola", "Hi") }
 }
 
+enum HubTab: Hashable {
+    case home, cart, account
+}
+
+/// Pestaña activa del Market; las pantallas internas la usan para saltar al carrito.
+@MainActor
+final class MarketNav: ObservableObject {
+    @Published var tab = HubTab.home
+}
+
 /// Market nativo: pestañas Inicio, Carrito y Cuenta. Las demás (buscador,
 /// favoritos) se suman en las siguientes etapas del plan.
 struct MarketHub: View {
@@ -36,21 +46,26 @@ struct MarketHub: View {
 
     @StateObject private var cart = MarketCart()
     @StateObject private var session = MarketSession()
+    @StateObject private var nav = MarketNav()
 
     var body: some View {
         let text = HubText(language: language)
-        TabView {
+        TabView(selection: $nav.tab) {
             MarketScreen(language: language, onExit: onExit, onOpenWeb: onOpenWeb)
                 .tabItem { Label(text.home, systemImage: "storefront") }
+                .tag(HubTab.home)
             CartScreen(language: language, onOpenWeb: onOpenWeb)
                 .tabItem { Label(text.cart, systemImage: "cart") }
+                .tag(HubTab.cart)
                 .badge(cart.itemCount)
             AccountScreen(language: language, onLanguage: onLanguage)
                 .tabItem { Label(text.account, systemImage: "person.crop.circle") }
+                .tag(HubTab.account)
         }
         .tint(.brandOrange)
         .environmentObject(cart)
         .environmentObject(session)
+        .environmentObject(nav)
         .task { await session.refresh() }
     }
 }

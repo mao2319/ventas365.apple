@@ -35,8 +35,10 @@ struct MarketProduct: Identifiable, Decodable, Hashable {
     let imageUrl: String?
     let category: String?
     let brand: String?
+    /// Solo viene en las consultas entre varias tiendas.
+    var storeId: String? = nil
 
-    var id: String { code }
+    var id: String { storeId.map { "\($0)-\(code)" } ?? code }
 
     var categoryName: String {
         let name = (category ?? "").trimmingCharacters(in: .whitespaces)
@@ -62,4 +64,18 @@ enum Money {
         formatter.minimumFractionDigits = whole ? 0 : 2
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
+}
+
+struct MarketCategory: Identifiable, Hashable {
+    let name: String
+    let storeCount: Int
+    let imageUrl: String?
+
+    var id: String { name }
+    var displayName: String { name.capitalized }
+}
+
+struct MarketRating: Hashable {
+    let average: Double
+    let count: Int
 }
