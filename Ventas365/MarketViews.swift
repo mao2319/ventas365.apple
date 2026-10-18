@@ -133,7 +133,7 @@ struct MarketScreen: View {
     }
 }
 
-private struct RemoteImage: View {
+struct RemoteImage: View {
     let url: String?
 
     var body: some View {
@@ -320,7 +320,7 @@ struct MarketStoreScreen: View {
                         .padding(.horizontal, 16)
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(groups[name] ?? []) { product in
-                            ProductCard(product: product, currency: store.currencyCode)
+                            ProductCard(product: product, store: store)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -333,7 +333,10 @@ struct MarketStoreScreen: View {
 
 private struct ProductCard: View {
     let product: MarketProduct
-    let currency: String?
+    let store: MarketStore
+    @EnvironmentObject private var cart: MarketCart
+
+    private var currency: String? { store.currencyCode }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -368,9 +371,29 @@ private struct ProductCard: View {
                     .font(.system(size: 16, weight: .bold))
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+            cartControl
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// "Agregar" o, si ya está en el carrito, el control de cantidad.
+    @ViewBuilder
+    private var cartControl: some View {
+        let quantity = cart.quantity(storeId: store.storeId, code: product.code)
+        if quantity == 0 {
+            Button { cart.add(product, from: store) } label: {
+                Image(systemName: "plus").frame(maxWidth: .infinity, minHeight: 32)
+            }
+            .buttonStyle(.bordered)
+            .tint(.brandOrange)
+        } else {
+            QuantityStepper(quantity: quantity) { next in
+                if next > quantity { cart.add(product, from: store) } else { cart.remove(product, from: store) }
+            }
+            .frame(maxWidth: .infinity)
+        }
     }
 }

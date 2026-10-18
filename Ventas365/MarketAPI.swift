@@ -29,6 +29,26 @@ enum MarketAPI {
         return try decoder.decode(T.self, from: data)
     }
 
+    /// Llama a una función de Supabase (`/functions/v1/<nombre>`) con cuerpo
+    /// JSON. Las funciones del Market responden 200 con `success: false` en los
+    /// errores esperados; un 4xx/5xx con cuerpo legible también se decodifica.
+    static func invoke<Body: Encodable, Response: Decodable>(_ function: String, _ body: Body) async throws -> Response {
+        var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/\(function)"))
+        request.httpMethod = "POST"
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard response is HTTPURLResponse else { throw APIError.badResponse }
+        do {
+            return try decoder.decode(Response.self, from: data)
+        } catch {
+            throw APIError.badResponse
+        }
+    }
+
     /// Tiendas visibles en el Market (con ciudad y visibilidad activada).
     static func stores() async throws -> [MarketStore] {
         try await get("stores", [

@@ -33,8 +33,9 @@ struct RootView: View {
                 // vuelve al Market nativo.
                 WebScreen(web: web, section: .market, path: path, onExit: { marketWebPath = nil })
             } else if section == .market {
-                MarketScreen(
+                MarketHub(
                     language: web.language,
+                    onLanguage: web.select,
                     onExit: { section = nil },
                     onOpenWeb: { marketWebPath = $0 }
                 )
