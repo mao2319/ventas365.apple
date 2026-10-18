@@ -79,3 +79,23 @@ struct MarketRating: Hashable {
     let average: Double
     let count: Int
 }
+
+/// Fila de "Los más buscados" (respuesta de `top_searched_products`).
+struct MostSearchedProduct: Decodable, Identifiable, Hashable {
+    let storeId: String
+    let productCode: String
+    let description: String
+    let unitPrice: Double
+    let compareAtPrice: Double?
+    let imageUrl: String?
+    let storeName: String
+    let searchCount: Int
+
+    var id: String { "\(storeId)-\(productCode)" }
+
+    /// Como producto de catálogo, para reutilizar tarjetas y detalle.
+    var asProduct: MarketProduct {
+        MarketProduct(code: productCode, description: description, unitPrice: unitPrice, compareAtPrice: compareAtPrice,
+                      stock: nil, imageUrl: imageUrl, category: nil, brand: nil, storeId: storeId)
+    }
+}

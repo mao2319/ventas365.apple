@@ -55,6 +55,7 @@ final class MarketHomeModel: ObservableObject {
     @Published var stores: [MarketStore] = []
     @Published var categories: [MarketCategory] = []
     @Published var openStates: [String: Bool] = [:]
+    @Published var trending: [MostSearchedProduct] = []
 
     func load() async {
         if state == .loaded { return }
@@ -69,8 +70,10 @@ final class MarketHomeModel: ObservableObject {
         let ids = stores.map(\.storeId)
         async let loadedCategories = try? MarketAPI.categories(storeIds: ids)
         async let loadedStates = try? MarketAPI.openStates()
+        async let loadedTrending = try? MarketAPI.mostSearched(limit: 12)
         categories = (await loadedCategories) ?? []
         openStates = (await loadedStates) ?? [:]
+        trending = (await loadedTrending) ?? []
     }
 
     func reload() async {
@@ -87,6 +90,7 @@ struct MarketScreen: View {
     let onOpenWeb: (String) -> Void
 
     @StateObject private var model = MarketHomeModel()
+    @State private var detail: ProductDetailItem?
 
     var body: some View {
         let text = MarketText(language: language)
@@ -118,6 +122,9 @@ struct MarketScreen: View {
         }
         .tint(.brandOrange)
         .task { await model.load() }
+        .sheet(item: $detail) { item in
+            ProductDetailSheet(product: item.product, store: item.store, language: language)
+        }
     }
 
     @ViewBuilder
@@ -154,6 +161,13 @@ struct MarketScreen: View {
                             .padding(.horizontal, 16)
                         }
                         .padding(.top, -12)
+                    }
+                    if !model.trending.isEmpty {
+                        Text(SearchText(language: language).trending)
+                            .font(.system(size: 22, weight: .bold))
+                            .padding(.horizontal, 16)
+                        TrendingRail(items: model.trending, stores: model.stores, language: language) { detail = $0 }
+                            .padding(.top, -12)
                     }
                     railHeader(text.stores, action: text.seeAll, route: .allStores)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -209,7 +223,7 @@ struct RemoteImage: View {
     }
 }
 
-private struct OpenBadge: View {
+struct OpenBadge: View {
     let isOpen: Bool
     let language: AppLanguage
 
@@ -558,11 +572,9 @@ struct MarketStoreScreen: View {
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .padding(.horizontal, 16)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.brandOrange)
+            .modifier(PrimaryActionStyle())
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.regularMaterial)
         }
     }
 

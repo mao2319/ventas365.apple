@@ -77,12 +77,16 @@ enum MarketAPI {
     private struct OpenRow: Decodable { let storeId: String; let isOpen: Bool }
 
     private static func rpc<Response: Decodable>(_ name: String) async throws -> Response {
+        try await rpc(name, Empty())
+    }
+
+    private static func rpc<Body: Encodable, Response: Decodable>(_ name: String, _ body: Body) async throws -> Response {
         var request = URLRequest(url: baseURL.appendingPathComponent("rest/v1/rpc/\(name)"))
         request.httpMethod = "POST"
         request.setValue(publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(Empty())
+        request.httpBody = try JSONEncoder().encode(body)
         request.timeoutInterval = 20
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -177,5 +181,59 @@ enum MarketAPI {
         ])
         guard !rows.isEmpty else { return MarketRating(average: 0, count: 0) }
         return MarketRating(average: Double(rows.reduce(0) { $0 + $1.rating }) / Double(rows.count), count: rows.count)
+    }
+
+    // MARK: - Búsqueda y más buscados
+
+    /// Todos los productos disponibles de las tiendas dadas (el buscador los
+    /// filtra en el teléfono, igual que el sitio).
+    static func allProducts(storeIds: [String]) async throws -> [MarketProduct] {
+        guard !storeIds.isEmpty else { return [] }
+        return try await get("products", [
+            URLQueryItem(name: "select", value: "code,description,unit_price,compare_at_price,stock,image_url,category,brand,store_id"),
+            URLQueryItem(name: "store_id", value: inList(storeIds)),
+            URLQueryItem(name: "or", value: "(stock.is.null,stock.gt.0)"),
+            URLQueryItem(name: "order", value: "description"),
+        ])
+    }
+
+    private struct LimitBody: Encodable {
+        let limitCount: Int
+        enum CodingKeys: String, CodingKey { case limitCount = "limit_count" }
+    }
+
+    /// Productos con más coincidencias de búsqueda entre todas las tiendas.
+    static func mostSearched(limit: Int) async throws -> [MostSearchedProduct] {
+        try await rpc("top_searched_products", LimitBody(limitCount: limit))
+    }
+
+    private struct SearchHit: Encodable {
+        let storeId: String
+        let productCode: String
+        let query: String
+        enum CodingKeys: String, CodingKey {
+            case storeId = "store_id"
+            case productCode = "product_code"
+            case query
+        }
+    }
+
+    /// Suma una coincidencia por producto encontrado (alimenta "Más buscados").
+    /// No bloquea nada: si falla, se ignora.
+    static func recordSearchHits(_ products: [MarketProduct], query: String) async {
+        let rows = products.compactMap { product -> SearchHit? in
+            guard let storeId = product.storeId else { return nil }
+            return SearchHit(storeId: storeId, productCode: product.code, query: query)
+        }
+        guard !rows.isEmpty else { return }
+        var request = URLRequest(url: baseURL.appendingPathComponent("rest/v1/product_search_hits"))
+        request.httpMethod = "POST"
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        request.httpBody = try? JSONEncoder().encode(rows)
+        request.timeoutInterval = 20
+        _ = try? await URLSession.shared.data(for: request)
     }
 }

@@ -6,6 +6,7 @@ struct HubText {
     private func pick(_ es: String, _ en: String) -> String { language == .es ? es : en }
 
     var home: String { pick("Inicio", "Home") }
+    var search: String { pick("Buscar", "Search") }
     var cart: String { pick("Carrito", "Cart") }
     var account: String { pick("Cuenta", "Account") }
     var cartEmptyTitle: String { pick("Tu carrito está vacío", "Your cart is empty") }
@@ -27,7 +28,7 @@ struct HubText {
 }
 
 enum HubTab: Hashable {
-    case home, cart, account
+    case home, search, cart, account
 }
 
 /// Pestaña activa del Market; las pantallas internas la usan para saltar al carrito.
@@ -54,6 +55,9 @@ struct MarketHub: View {
             MarketScreen(language: language, onExit: onExit, onOpenWeb: onOpenWeb)
                 .tabItem { Label(text.home, systemImage: "storefront") }
                 .tag(HubTab.home)
+            SearchScreen(language: language)
+                .tabItem { Label(text.search, systemImage: "magnifyingglass") }
+                .tag(HubTab.search)
             CartScreen(language: language, onOpenWeb: onOpenWeb)
                 .tabItem { Label(text.cart, systemImage: "cart") }
                 .tag(HubTab.cart)
@@ -63,10 +67,35 @@ struct MarketHub: View {
                 .tag(HubTab.account)
         }
         .tint(.brandOrange)
+        .modifier(LiquidGlassTabs())
         .environmentObject(cart)
         .environmentObject(session)
         .environmentObject(nav)
         .task { await session.refresh() }
+    }
+}
+
+/// Con iOS 26 la barra de pestañas, las barras de navegación y la búsqueda ya
+/// usan Liquid Glass sin hacer nada; aquí solo se pide que la barra de
+/// pestañas se compacte al desplazar. En versiones anteriores no cambia.
+struct LiquidGlassTabs: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
+    }
+}
+
+/// Botón principal: cristal en iOS 26, relleno de color en versiones anteriores.
+struct PrimaryActionStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glassProminent).tint(.brandOrange)
+        } else {
+            content.buttonStyle(.borderedProminent).tint(.brandOrange)
+        }
     }
 }
 
