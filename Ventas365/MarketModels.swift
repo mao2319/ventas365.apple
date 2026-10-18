@@ -9,11 +9,14 @@ struct MarketStore: Identifiable, Decodable, Hashable {
     let city: String?
     let address: String?
     let phoneNumber: String?
+    let countryIso: String?
     let currencyCode: String?
     let deliveryTimeMin: Int?
     let deliveryTimeMax: Int?
     let deliveryCost: Double?
     let minimumOrder: Double?
+    let latitude: Double?
+    let longitude: Double?
 
     var id: String { storeId }
 

@@ -22,23 +22,13 @@ struct RootView: View {
     // sus avisos (abre Domicilios).
     @StateObject private var courier = CourierShift.shared
     @State private var section: AppSection?
-    // Market nativo: página del sitio a la que se pasó (pedido y pago).
-    @State private var marketWebPath: String?
     @State private var showSplash = true
 
     var body: some View {
         ZStack {
-            if section == .market, let path = marketWebPath {
-                // Pedido y pago de una tienda: por ahora en el sitio; "atrás"
-                // vuelve al Market nativo.
-                WebScreen(web: web, section: .market, path: path, onExit: { marketWebPath = nil })
-            } else if section == .market {
-                MarketHub(
-                    language: web.language,
-                    onLanguage: web.select,
-                    onExit: { section = nil },
-                    onOpenWeb: { marketWebPath = $0 }
-                )
+            if section == .market {
+                // Market nativo: el pedido se genera en la app, sin pasar por el sitio.
+                MarketHub(language: web.language, onExit: { section = nil })
             } else if let section {
                 WebScreen(web: web, section: section, onExit: { self.section = nil })
             } else {

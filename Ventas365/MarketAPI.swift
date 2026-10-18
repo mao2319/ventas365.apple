@@ -49,10 +49,22 @@ enum MarketAPI {
         }
     }
 
+    private static let storeColumns = "store_id,name,logo_url,cover_url,department,city,address,phone_number,country_iso,currency_code,delivery_time_min,delivery_time_max,delivery_cost,minimum_order,latitude,longitude"
+
+    /// Una tienda del Market por su id.
+    static func store(storeId: String) async throws -> MarketStore? {
+        let rows: [MarketStore] = try await get("stores", [
+            URLQueryItem(name: "select", value: storeColumns),
+            URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+            URLQueryItem(name: "market_enabled", value: "eq.true"),
+        ])
+        return rows.first
+    }
+
     /// Tiendas visibles en el Market (con ciudad y visibilidad activada).
     static func stores() async throws -> [MarketStore] {
         try await get("stores", [
-            URLQueryItem(name: "select", value: "store_id,name,logo_url,cover_url,department,city,address,phone_number,currency_code,delivery_time_min,delivery_time_max,delivery_cost,minimum_order"),
+            URLQueryItem(name: "select", value: storeColumns),
             URLQueryItem(name: "city", value: "not.is.null"),
             URLQueryItem(name: "city", value: "neq."),
             URLQueryItem(name: "market_enabled", value: "eq.true"),
@@ -235,5 +247,58 @@ enum MarketAPI {
         request.httpBody = try? JSONEncoder().encode(rows)
         request.timeoutInterval = 20
         _ = try? await URLSession.shared.data(for: request)
+    }
+
+    // MARK: - Pedido
+
+    /// Medios QR que la tienda tiene configurados y activos.
+    static func enabledQrMethods(storeId: String) async throws -> Set<String> {
+        struct Row: Decodable { let method: String; let accountLabel: String?; let qrImageUrl: String?; let enabled: Bool }
+        let rows: [Row] = try await get("store_payment_methods", [
+            URLQueryItem(name: "select", value: "method,account_label,qr_image_url,enabled"),
+            URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+        ])
+        return Set(rows.filter { $0.enabled && !(($0.accountLabel ?? "").isEmpty && ($0.qrImageUrl ?? "").isEmpty) }.map(\.method))
+    }
+
+    /// Genera el pedido en el servidor (función `market-place-order`).
+    static func placeOrder(_ request: PlaceOrderRequest) async throws -> PlaceOrderResponse {
+        try await invoke("market-place-order", request)
+    }
+
+    private struct AddressRequest: Encodable {
+        let action: String
+        let token: String
+        var label: String?
+        var address: String?
+        var city: String?
+        var department: String?
+        var isDefault: Bool?
+    }
+
+    private struct AddressesResponse: Decodable {
+        let success: Bool?
+        let addresses: [SavedAddress]?
+    }
+
+    /// Direcciones guardadas del cliente. Si el servicio no responde, lista vacía.
+    static func addresses(token: String) async -> [SavedAddress] {
+        let response: AddressesResponse? = try? await invoke("market-customer-addresses", AddressRequest(action: "list", token: token))
+        return response?.addresses ?? []
+    }
+
+    /// Guarda una dirección nueva en la cuenta (no bloquea el pedido si falla).
+    static func saveAddress(token: String, label: String, address: String, city: String, department: String) async {
+        let body = AddressRequest(action: "save", token: token, label: label, address: address, city: city, department: department, isDefault: false)
+        let _: AddressesResponse? = try? await invoke("market-customer-addresses", body)
+    }
+
+    private struct TokenBody: Encodable { let token: String }
+
+    /// Pedidos y compras del cliente en todas las tiendas.
+    static func purchases(token: String) async throws -> [CustomerPurchase] {
+        let response: PurchasesResponse = try await invoke("market-customer-purchases", TokenBody(token: token))
+        guard response.success == true else { throw APIError.badResponse }
+        return response.purchases ?? []
     }
 }

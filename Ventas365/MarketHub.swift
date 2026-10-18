@@ -12,7 +12,8 @@ struct HubText {
     var cartEmptyTitle: String { pick("Tu carrito está vacío", "Your cart is empty") }
     var cartEmptyBody: String { pick("Agrega productos desde el catálogo de una tienda.", "Add products from a store's catalog.") }
     var total: String { pick("Total", "Total") }
-    var continueOnSite: String { pick("Continuar en el sitio", "Continue on the site") }
+    var continueOrder: String { pick("Continuar pedido", "Continue order") }
+    var myOrders: String { pick("Mis pedidos", "My orders") }
     var emptyCart: String { pick("Vaciar carrito", "Empty cart") }
     var signInTitle: String { pick("Inicia sesión", "Sign in") }
     var signInBody: String { pick("Para hacer pedidos y guardar tus favoritos en todos tus dispositivos.", "To place orders and keep your favorites on all your devices.") }
@@ -23,7 +24,6 @@ struct HubText {
     var signOut: String { pick("Cerrar sesión", "Sign out") }
     var invalid: String { pick("Correo/celular o contraseña incorrectos.", "Incorrect email/mobile or password.") }
     var networkError: String { pick("No pudimos conectarnos. Inténtalo de nuevo.", "We couldn't connect. Please try again.") }
-    var language_: String { pick("Idioma", "Language") }
     var hello: String { pick("Hola", "Hi") }
 }
 
@@ -41,9 +41,7 @@ final class MarketNav: ObservableObject {
 /// favoritos) se suman en las siguientes etapas del plan.
 struct MarketHub: View {
     let language: AppLanguage
-    let onLanguage: (AppLanguage) -> Void
     let onExit: () -> Void
-    let onOpenWeb: (String) -> Void
 
     @StateObject private var cart = MarketCart()
     @StateObject private var session = MarketSession()
@@ -52,17 +50,17 @@ struct MarketHub: View {
     var body: some View {
         let text = HubText(language: language)
         TabView(selection: $nav.tab) {
-            MarketScreen(language: language, onExit: onExit, onOpenWeb: onOpenWeb)
+            MarketScreen(language: language, onExit: onExit)
                 .tabItem { Label(text.home, systemImage: "storefront") }
                 .tag(HubTab.home)
             SearchScreen(language: language)
                 .tabItem { Label(text.search, systemImage: "magnifyingglass") }
                 .tag(HubTab.search)
-            CartScreen(language: language, onOpenWeb: onOpenWeb)
+            CartScreen(language: language)
                 .tabItem { Label(text.cart, systemImage: "cart") }
                 .tag(HubTab.cart)
                 .badge(cart.itemCount)
-            AccountScreen(language: language, onLanguage: onLanguage)
+            AccountScreen(language: language)
                 .tabItem { Label(text.account, systemImage: "person.crop.circle") }
                 .tag(HubTab.account)
         }
@@ -92,9 +90,9 @@ struct LiquidGlassTabs: ViewModifier {
 struct PrimaryActionStyle: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.buttonStyle(.glassProminent).tint(.brandOrange)
+            content.buttonStyle(.glassProminent).tint(.brandGreen)
         } else {
-            content.buttonStyle(.borderedProminent).tint(.brandOrange)
+            content.buttonStyle(.borderedProminent).tint(.brandGreen)
         }
     }
 }
@@ -103,7 +101,6 @@ struct PrimaryActionStyle: ViewModifier {
 
 struct CartScreen: View {
     let language: AppLanguage
-    let onOpenWeb: (String) -> Void
 
     @EnvironmentObject private var cart: MarketCart
 
@@ -135,9 +132,11 @@ struct CartScreen: View {
                                     Text(Money.format(storeCart.total, currency: storeCart.currency))
                                         .font(.system(size: 16, weight: .bold))
                                 }
-                                Button(text.continueOnSite) { onOpenWeb("/tiendas/\(storeCart.storeId)") }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.brandOrange)
+                                NavigationLink(value: OrderRoute(storeId: storeCart.storeId)) {
+                                    Text("\(text.continueOrder) · \(storeCart.itemCount)")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.brandGreen)
+                                }
                                 Button(text.emptyCart, role: .destructive) { cart.clear(storeId: storeCart.storeId) }
                             }
                         }
@@ -147,6 +146,9 @@ struct CartScreen: View {
             }
             .background(Color.paper.ignoresSafeArea())
             .navigationTitle(text.cart)
+            .navigationDestination(for: OrderRoute.self) { route in
+                OrderScreen(storeId: route.storeId, language: language)
+            }
         }
     }
 }
@@ -189,8 +191,8 @@ struct QuantityStepper: View {
             }
             .buttonStyle(.borderless)
         }
-        .background(Capsule().fill(Color.brandOrange.opacity(0.12)))
-        .foregroundColor(.brandOrange)
+        .background(Capsule().fill(Color.brandGreen))
+        .foregroundColor(.white)
     }
 }
 
@@ -198,123 +200,39 @@ struct QuantityStepper: View {
 
 struct AccountScreen: View {
     let language: AppLanguage
-    let onLanguage: (AppLanguage) -> Void
 
     @EnvironmentObject private var session: MarketSession
 
     var body: some View {
         let text = HubText(language: language)
         NavigationStack {
-            List {
+            Group {
                 if let customer = session.customer {
-                    Section {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(text.hello), \(customer.fullName)").font(.system(size: 17, weight: .semibold))
-                            Text(customer.email).font(.system(size: 14)).foregroundColor(.inkMuted)
+                    List {
+                        Section {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(text.hello), \(customer.fullName)").font(.system(size: 17, weight: .semibold))
+                                Text(customer.email).font(.system(size: 14)).foregroundColor(.inkMuted)
+                            }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                        Section {
+                            NavigationLink(text.myOrders) { MyOrdersScreen(language: language) }
+                        }
+                        Section {
+                            Button(text.signOut, role: .destructive) { session.signOut() }
+                        }
                     }
+                    .listStyle(.insetGrouped)
                 } else {
-                    Section {
-                        LoginForm(language: language)
-                    } header: {
-                        Text(text.signInTitle)
-                    } footer: {
-                        Text(text.signInBody)
-                    }
-                }
-                Section(text.language_) {
-                    Picker(text.language_, selection: Binding(get: { language }, set: onLanguage)) {
-                        ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                if session.isSignedIn {
-                    Section {
-                        Button(text.signOut, role: .destructive) { session.signOut() }
-                    }
+                    ScrollView { AccountWelcome(language: language) }
                 }
             }
-            .listStyle(.insetGrouped)
             .background(Color.paper.ignoresSafeArea())
             .navigationTitle(text.account)
-        }
-    }
-}
-
-private struct LoginForm: View {
-    let language: AppLanguage
-
-    @EnvironmentObject private var session: MarketSession
-    @State private var byPhone = false
-    @State private var email = ""
-    @State private var country = DialCountry.common[0]
-    @State private var phone = ""
-    @State private var password = ""
-    @State private var working = false
-    @State private var message: String?
-
-    var body: some View {
-        let text = HubText(language: language)
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $byPhone) {
-                Text(text.email).tag(false)
-                Text(text.phone).tag(true)
+            .navigationDestination(for: AuthRoute.self) { _ in
+                LoginScreen(language: language)
             }
-            .pickerStyle(.segmented)
-            if byPhone {
-                HStack {
-                    Picker("", selection: $country) {
-                        ForEach(DialCountry.common) { Text("\($0.iso2) \($0.dialCode)").tag($0) }
-                    }
-                    .labelsHidden()
-                    TextField(text.phone, text: $phone)
-                        .keyboardType(.numberPad)
-                        .textContentType(.telephoneNumber)
-                }
-            } else {
-                TextField(text.email, text: $email)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            }
-            SecureField(text.password, text: $password)
-                .textContentType(.password)
-            if let message {
-                Text(message).font(.system(size: 13)).foregroundColor(.red)
-            }
-            Button {
-                Task { await submit(text) }
-            } label: {
-                if working {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 28)
-                } else {
-                    Text(text.signIn).frame(maxWidth: .infinity, minHeight: 28)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.brandOrange)
-            .disabled(working || password.isEmpty || (byPhone ? phone.isEmpty : email.isEmpty))
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func submit(_ text: HubText) async {
-        working = true
-        message = nil
-        defer { working = false }
-        do {
-            if byPhone {
-                try await session.signIn(country: country, phone: phone.trimmingCharacters(in: .whitespaces), password: password)
-            } else {
-                try await session.signIn(email: email.trimmingCharacters(in: .whitespaces), password: password)
-            }
-            password = ""
-        } catch MarketSession.LoginError.rejected(let reason) {
-            message = reason ?? text.invalid
-        } catch {
-            message = text.networkError
         }
     }
 }

@@ -96,6 +96,15 @@ private struct PhoneLogin: Encodable {
     let password: String
 }
 
+private struct ResetBody: Encodable {
+    let email: String
+    let language: String
+}
+
+private struct ResetResponse: Decodable {
+    let success: Bool?
+}
+
 private struct TokenBody: Encodable {
     let token: String
 }
@@ -161,6 +170,15 @@ final class MarketSession: ObservableObject {
             throw LoginError.rejected(response.error)
         }
         store(token: token, customer: customer)
+    }
+
+    /// Envía el correo para cambiar la contraseña (`market-customer-request-reset`).
+    func requestPasswordReset(email: String, language: AppLanguage) async -> Bool {
+        let response: ResetResponse? = try? await MarketAPI.invoke(
+            "market-customer-request-reset",
+            ResetBody(email: email, language: language.rawValue)
+        )
+        return response?.success == true
     }
 
     func signOut() {

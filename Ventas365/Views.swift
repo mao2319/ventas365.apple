@@ -6,6 +6,8 @@ extension Color {
     static let brandOrange = Color(red: 0xFF / 255, green: 0x6A / 255, blue: 0x00 / 255)
     /// Domicilios: verde del Market.
     static let brandGreen = Color(red: 0x1A / 255, green: 0x7F / 255, blue: 0x4B / 255)
+    static let brandGreenDeep = Color(red: 0x13 / 255, green: 0x62 / 255, blue: 0x39 / 255)
+    static let brandGreenTint = Color(red: 0xE7 / 255, green: 0xF4 / 255, blue: 0xEC / 255)
     static let ink = Color(red: 0x1C / 255, green: 0x17 / 255, blue: 0x30 / 255)
     static let inkMuted = Color(red: 0x6B / 255, green: 0x67 / 255, blue: 0x76 / 255)
     static let paper = Color(red: 0xF6 / 255, green: 0xF4 / 255, blue: 0xF1 / 255)

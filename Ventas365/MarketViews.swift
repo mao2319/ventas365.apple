@@ -83,11 +83,10 @@ final class MarketHomeModel: ObservableObject {
 }
 
 /// Inicio del Market nativo: categorías y comercios en filas, con "Ver todos".
-/// El pedido y el pago se completan en el sitio por ahora (onOpenWeb).
+/// El pedido se genera dentro de la app (pestaña Carrito).
 struct MarketScreen: View {
     let language: AppLanguage
     let onExit: () -> Void
-    let onOpenWeb: (String) -> Void
 
     @StateObject private var model = MarketHomeModel()
     @State private var detail: ProductDetailItem?
@@ -806,10 +805,13 @@ struct CartControl: View {
         let quantity = cart.quantity(storeId: store.storeId, code: product.code)
         if quantity == 0 {
             Button { cart.add(product, from: store) } label: {
-                Image(systemName: "plus").frame(maxWidth: .infinity, minHeight: 32)
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(Capsule().fill(Color.brandGreen))
             }
-            .buttonStyle(.bordered)
-            .tint(.brandOrange)
+            .buttonStyle(.plain)
         } else {
             QuantityStepper(quantity: quantity) { next in
                 if next > quantity { cart.add(product, from: store) } else { cart.remove(product, from: store) }
