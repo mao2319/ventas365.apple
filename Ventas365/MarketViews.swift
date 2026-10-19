@@ -94,6 +94,9 @@ struct MarketScreen: View {
 
     @StateObject private var model = MarketHomeModel()
     @EnvironmentObject private var favorites: MarketFavorites
+    @EnvironmentObject private var session: MarketSession
+    @EnvironmentObject private var nav: MarketNav
+    @StateObject private var orders = MyOrdersModel()
     @State private var detail: ProductDetailItem?
 
     var body: some View {
@@ -130,6 +133,8 @@ struct MarketScreen: View {
         }
         .tint(.brandOrange)
         .task { await model.load() }
+        // Pedidos en curso: al entrar, al cambiar de cuenta y al volver a Inicio.
+        .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") { await orders.load(token: session.token) }
         .sheet(item: $detail) { item in
             ProductDetailSheet(product: item.product, store: item.store, language: language)
         }
@@ -170,7 +175,7 @@ struct MarketScreen: View {
                         }
                         .padding(.top, -12)
                     }
-                    ActiveOrdersRail(language: language)
+                    ActiveOrdersRail(language: language, model: orders)
                     railHeader(text.stores, action: text.seeAll, route: .allStores)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 14) {
@@ -205,7 +210,11 @@ struct MarketScreen: View {
                 }
                 .padding(.vertical, 8)
             }
-            .refreshable { await model.reload() }
+            .refreshable {
+                async let reloaded: Void = model.reload()
+                await orders.load(token: session.token)
+                await reloaded
+            }
         }
     }
 

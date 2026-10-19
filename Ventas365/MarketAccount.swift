@@ -518,9 +518,9 @@ struct ProfileScreen: View {
 struct ActiveOrdersRail: View {
     let language: AppLanguage
 
-    @EnvironmentObject private var session: MarketSession
-    @EnvironmentObject private var nav: MarketNav
-    @StateObject private var model = MyOrdersModel()
+    /// Lo carga la pantalla de inicio: un `.task` sobre una vista vacía (sin
+    /// pedidos) no se ejecutaría nunca y la sección jamás aparecería.
+    @ObservedObject var model: MyOrdersModel
 
     private var active: [CustomerPurchase] {
         if case .loaded(let list) = model.state { return list.filter(\.isActive) }
@@ -529,8 +529,8 @@ struct ActiveOrdersRail: View {
 
     var body: some View {
         let text = OrderText(language: language)
-        Group {
-            if !active.isEmpty {
+        if !active.isEmpty {
+            Group {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(language == .es ? "Órdenes en progreso" : "Orders in progress")
                         .font(.system(size: 22, weight: .bold))
@@ -566,9 +566,7 @@ struct ActiveOrdersRail: View {
                 }
             }
         }
-        // Se recarga al volver a la pestaña de inicio, para ver pedidos recién enviados.
-        .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") { await model.load(token: session.token) }
-    }
+            }
 }
 
 // MARK: - Eliminar cuenta
