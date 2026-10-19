@@ -118,11 +118,29 @@ struct PurchaseCourier: Decodable, Hashable {
     let vehicle: String?
 }
 
+struct GeoPoint: Decodable, Hashable {
+    let lat: Double
+    let lng: Double
+    let at: String?
+}
+
+struct DeliveryRating: Decodable, Hashable {
+    let stars: Int
+    let comment: String?
+}
+
 struct PurchaseDelivery: Decodable, Hashable {
+    let id: String?
     let status: String?
     let deliveredAt: String?
     let courierName: String?
     let courierPhone: String?
+    let vehicle: String?
+    let dispatchedAt: String?
+    let pickedUpAt: String?
+    let courierLocation: GeoPoint?
+    let proofNote: String?
+    let rating: DeliveryRating?
 }
 
 /// Pedido o compra del cliente (respuesta de `market-customer-purchases`).
@@ -142,6 +160,7 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
     let preparingAt: String?
     let readyAt: String?
     let courier: PurchaseCourier?
+    let storeLocation: GeoPoint?
     let delivery: PurchaseDelivery?
 
     var numberLabel: String {

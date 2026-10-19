@@ -585,4 +585,84 @@ enum MarketAPI {
     static func markProofsSeen(token: String) async {
         let _: SimpleResponse? = try? await invoke("payment-proofs", ProofsRequest(action: "seen", token: token))
     }
+
+    // MARK: - Seguimiento: chat con el domiciliario, calificación y comprobantes
+
+    struct ChatMessage: Decodable, Identifiable, Hashable {
+        let id: String
+        let sender: String
+        let senderName: String?
+        let body: String?
+        let imageUrl: String?
+        let isProof: Bool?
+        let createdAt: String
+    }
+
+    struct ChatResponse: Decodable {
+        let success: Bool?
+        let error: String?
+        let status: String?
+        let messages: [ChatMessage]?
+    }
+
+    private struct ChatImage: Encodable { let data: String; let contentType: String }
+    private struct ChatRequest: Encodable {
+        let action: String
+        let role = "customer"
+        let token: String
+        let deliveryId: String
+        var body: String?
+        var image: ChatImage?
+        var stars: Int?
+        var comment: String?
+    }
+
+    static func deliveryChat(token: String, deliveryId: String) async throws -> ChatResponse {
+        try await invoke("delivery-chat", ChatRequest(action: "list", token: token, deliveryId: deliveryId))
+    }
+
+    static func sendDeliveryMessage(token: String, deliveryId: String, body: String, jpeg: Data?) async throws -> ChatResponse {
+        var request = ChatRequest(action: "send", token: token, deliveryId: deliveryId)
+        request.body = body
+        if let jpeg { request.image = ChatImage(data: jpeg.base64EncodedString(), contentType: "image/jpeg") }
+        return try await invoke("delivery-chat", request)
+    }
+
+    static func rateDelivery(token: String, deliveryId: String, stars: Int, comment: String) async throws -> ChatResponse {
+        var request = ChatRequest(action: "rate", token: token, deliveryId: deliveryId)
+        request.stars = stars
+        request.comment = comment
+        return try await invoke("delivery-chat", request)
+    }
+
+    /// Envía el comprobante de un pago por Nequi, Daviplata o Llave Bre-B (multipart).
+    static func submitProof(token: String, storeId: String, method: String, orderKind: String, orderRef: String,
+                            amount: Double?, note: String, jpeg: Data) async throws -> SimpleResponse {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        }
+        field("token", token)
+        field("storeId", storeId)
+        field("method", method)
+        field("orderKind", orderKind)
+        field("orderRef", orderRef)
+        if let amount { field("amount", String(Int(amount.rounded()))) }
+        if !note.isEmpty { field("note", note) }
+        body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"comprobante.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n".utf8))
+        body.append(jpeg)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/payment-proofs"))
+        request.httpMethod = "POST"
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 60
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let decoded = try? decoder.decode(SimpleResponse.self, from: data) else { throw APIError.badResponse }
+        return decoded
+    }
 }
