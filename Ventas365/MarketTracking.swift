@@ -377,10 +377,6 @@ struct DeliveryChatSheet: View {
             .navigationTitle(text.chat)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(text.close) { dismiss() } } }
-            .task {
-                guard let token = session.token else { return }
-                orders = await MarketAPI.proofOrders(token: token, storeId: storeId)
-            }
             .onChange(of: picked) { item in
                 guard let item else { return }
                 Task {
@@ -535,6 +531,10 @@ struct PaymentProofSheet: View {
             .navigationTitle(text.sendProof)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(text.close) { dismiss() } } }
+            .task {
+                guard let token = session.token else { return }
+                orders = await MarketAPI.proofOrders(token: token, storeId: storeId)
+            }
             .onChange(of: picked) { item in
                 guard let item else { return }
                 Task {
