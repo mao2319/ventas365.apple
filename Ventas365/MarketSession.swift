@@ -50,6 +50,15 @@ struct MarketCustomer: Codable, Equatable {
     let address: String?
     let email: String
     let avatarUrl: String?
+
+    /// "+57 3016226348" con el indicativo del país.
+    var phoneLabel: String {
+        guard let phone, !phone.isEmpty else { return "" }
+        let dial = DialCountry.common.first { $0.iso2 == countryIso }?.dialCode
+        return [dial, phone].compactMap { $0 }.joined(separator: " ")
+    }
+
+    var initial: String { String(fullName.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased() }
 }
 
 /// País para iniciar sesión con celular (la lista completa llega con el registro).
@@ -179,6 +188,12 @@ final class MarketSession: ObservableObject {
             ResetBody(email: email, language: language.rawValue)
         )
         return response?.success == true
+    }
+
+    /// Guarda los datos nuevos del perfil que devolvió el servidor.
+    func apply(_ customer: MarketCustomer) {
+        guard let token else { return }
+        store(token: token, customer: customer)
     }
 
     func signOut() {

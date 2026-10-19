@@ -7,6 +7,7 @@ private struct MarketText {
 
     var title: String { "Market" }
     var stores: String { pick("Comercios", "Stores") }
+    var favoriteProducts: String { pick("Productos favoritos", "Favorite products") }
     var categories: String { pick("Categorías", "Categories") }
     var seeAll: String { pick("Ver todos", "See all") }
     var seeAllFeminine: String { pick("Ver todas", "See all") }
@@ -56,6 +57,7 @@ final class MarketHomeModel: ObservableObject {
     @Published var categories: [MarketCategory] = []
     @Published var openStates: [String: Bool] = [:]
     @Published var trending: [MostSearchedProduct] = []
+    @Published var topFavorites: [MostSearchedProduct] = []
 
     func load() async {
         if state == .loaded { return }
@@ -71,9 +73,11 @@ final class MarketHomeModel: ObservableObject {
         async let loadedCategories = try? MarketAPI.categories(storeIds: ids)
         async let loadedStates = try? MarketAPI.openStates()
         async let loadedTrending = try? MarketAPI.mostSearched(limit: 12)
+        async let loadedFavorites = try? MarketAPI.topFavorites(limit: 12)
         categories = (await loadedCategories) ?? []
         openStates = (await loadedStates) ?? [:]
         trending = (await loadedTrending) ?? []
+        topFavorites = (await loadedFavorites) ?? []
     }
 
     func reload() async {
@@ -89,6 +93,7 @@ struct MarketScreen: View {
     let onExit: () -> Void
 
     @StateObject private var model = MarketHomeModel()
+    @EnvironmentObject private var favorites: MarketFavorites
     @State private var detail: ProductDetailItem?
 
     var body: some View {
@@ -148,6 +153,7 @@ struct MarketScreen: View {
         case .loaded:
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    ActiveOrdersRail(language: language)
                     if !model.categories.isEmpty {
                         railHeader(text.categories, action: text.seeAllFeminine, route: .allCategories)
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -168,14 +174,25 @@ struct MarketScreen: View {
                         TrendingRail(items: model.trending, stores: model.stores, language: language) { detail = $0 }
                             .padding(.top, -12)
                     }
+                    if !model.topFavorites.isEmpty {
+                        Text(text.favoriteProducts)
+                            .font(.system(size: 22, weight: .bold))
+                            .padding(.horizontal, 16)
+                        TrendingRail(items: model.topFavorites, stores: model.stores, language: language) { detail = $0 }
+                            .padding(.top, -12)
+                    }
                     railHeader(text.stores, action: text.seeAll, route: .allStores)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 14) {
                             ForEach(model.stores) { store in
-                                NavigationLink(value: store) {
-                                    StoreCard(store: store, isOpen: model.openStates[store.storeId], language: language)
+                                ZStack(alignment: .topLeading) {
+                                    NavigationLink(value: store) {
+                                        StoreCard(store: store, isOpen: model.openStates[store.storeId], language: language)
+                                    }
+                                    .buttonStyle(.plain)
+                                    HeartButton(isOn: favorites.isFavorite(store: store.storeId)) { favorites.toggle(store: store.storeId) }
+                                        .padding(8)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -272,10 +289,12 @@ private struct StoreCard: View {
     }
 }
 
-private struct StoreRow: View {
+struct StoreRow: View {
     let store: MarketStore
     let isOpen: Bool?
     let language: AppLanguage
+
+    @EnvironmentObject private var favorites: MarketFavorites
 
     var body: some View {
         HStack(spacing: 14) {
@@ -291,6 +310,7 @@ private struct StoreRow: View {
             }
             Spacer()
             if let isOpen { OpenBadge(isOpen: isOpen, language: language) }
+            HeartButton(isOn: favorites.isFavorite(store: store.storeId), size: 30) { favorites.toggle(store: store.storeId) }
         }
         .padding(.vertical, 4)
     }
@@ -306,13 +326,23 @@ private struct CategoryTile: View {
                 if category.imageUrl != nil {
                     RemoteImage(url: category.imageUrl).clipShape(Circle())
                 } else {
-                    Text(String(category.displayName.prefix(1)))
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.inkMuted)
+                    Image(systemName: category.symbol)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(.brandGreen)
                 }
             }
             .frame(width: 68, height: 68)
             .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 1))
+            .overlay(alignment: .bottomTrailing) {
+                if category.imageUrl != nil {
+                    Image(systemName: category.symbol)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(Color.brandGreen))
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                }
+            }
             Text(category.displayName)
                 .font(.system(size: 13, weight: .medium))
                 .multilineTextAlignment(.center)
@@ -531,6 +561,7 @@ struct MarketStoreScreen: View {
     @StateObject private var model = MarketProductsModel()
     @EnvironmentObject private var cart: MarketCart
     @EnvironmentObject private var nav: MarketNav
+    @EnvironmentObject private var favorites: MarketFavorites
     @State private var query = ""
     @State private var detail: ProductDetailItem?
 
@@ -551,6 +582,14 @@ struct MarketStoreScreen: View {
         .navigationTitle(store.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: text.searchProducts)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { favorites.toggle(store: store.storeId) } label: {
+                    Image(systemName: favorites.isFavorite(store: store.storeId) ? "heart.fill" : "heart")
+                        .foregroundColor(favorites.isFavorite(store: store.storeId) ? .red : .ink)
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) { cartBar(text) }
         .task { await model.load(storeId: store.storeId) }
         .sheet(item: $detail) { item in
@@ -659,6 +698,7 @@ struct MarketStoreScreen: View {
                     .padding(.horizontal, 16)
                 }
             }
+            StoreInfoPanel(store: store, language: language, isOpen: isOpen, rating: model.rating)
         }
         .padding(.bottom, 8)
     }
@@ -733,6 +773,8 @@ struct ProductCard: View {
     let store: MarketStore
     let onOpen: () -> Void
 
+    @EnvironmentObject private var favorites: MarketFavorites
+
     private var currency: String? { store.currencyCode }
 
     var body: some View {
@@ -772,6 +814,12 @@ struct ProductCard: View {
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(alignment: .topTrailing) {
+            HeartButton(isOn: favorites.isFavorite(product: product.code, store: store.storeId), size: 30) {
+                favorites.toggle(product: product.code, store: store.storeId)
+            }
+            .padding(8)
+        }
     }
 }
 
@@ -828,12 +876,16 @@ struct ProductDetailSheet: View {
     let language: AppLanguage
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var favorites: MarketFavorites
 
     var body: some View {
         let text = MarketText(language: language)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
+                    HeartButton(isOn: favorites.isFavorite(product: product.code, store: store.storeId)) {
+                        favorites.toggle(product: product.code, store: store.storeId)
+                    }
                     Spacer()
                     Button(text.close) { dismiss() }.font(.system(size: 16, weight: .semibold))
                 }

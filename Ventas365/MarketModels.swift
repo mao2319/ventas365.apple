@@ -17,8 +17,23 @@ struct MarketStore: Identifiable, Decodable, Hashable {
     let minimumOrder: Double?
     let latitude: Double?
     let longitude: Double?
+    let phoneCountryIso: String?
+    let instagramHandle: String?
+    let instagramUrl: String?
+    let addressForMap: String?
+    let businessHours: [DayHours]?
 
     var id: String { storeId }
+
+    /// Dirección para mostrar y para buscar en el mapa.
+    var fullAddress: String {
+        [address, city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    var hasGps: Bool { latitude != nil && longitude != nil }
+
+    /// Enlace público del perfil de la tienda en el sitio.
+    var shareUrl: URL { URL(string: "https://ventas365.app/tiendas/\(storeId)")! }
 
     /// "Bogotá" o "Bogotá, Cundinamarca".
     var place: String {
@@ -27,6 +42,13 @@ struct MarketStore: Identifiable, Decodable, Hashable {
 
     /// El nombre se guarda en mayúsculas: se muestra como título.
     var displayName: String { name.capitalized }
+}
+
+/// Horario de un día (la tienda guarda 7 posiciones, 0 = domingo).
+struct DayHours: Decodable, Hashable {
+    let closed: Bool?
+    let open: String?
+    let close: String?
 }
 
 struct MarketProduct: Identifiable, Decodable, Hashable {
@@ -76,6 +98,36 @@ struct MarketCategory: Identifiable, Hashable {
 
     var id: String { name }
     var displayName: String { name.capitalized }
+
+    /// Ícono (SF Symbol) según el nombre de la categoría.
+    var symbol: String {
+        let key = MarketAPI.fold(name)
+        let rules: [([String], String)] = [
+            (["bebida", "gaseosa", "jugo", "agua", "licor", "cerveza", "vino"], "cup.and.saucer.fill"),
+            (["cafe", "te ", "infusion"], "mug.fill"),
+            (["pizza"], "triangle.fill"),
+            (["hamburguesa", "comida rapida", "perro", "sandwich"], "takeoutbag.and.cup.and.straw.fill"),
+            (["postre", "helado", "torta", "dulce", "panader", "pan ", "pastel", "galleta", "reposter"], "birthday.cake.fill"),
+            (["fruta", "verdura", "huevo", "organic", "vegetal"], "leaf.fill"),
+            (["carne", "pollo", "pescado", "marisco", "embutido", "cerdo", "res "], "fork.knife"),
+            (["lacteo", "queso", "leche", "yogur"], "drop.fill"),
+            (["snack", "mecato", "chocolate", "confite", "papas"], "popcorn.fill"),
+            (["aseo", "limpieza", "hogar"], "sparkles"),
+            (["belleza", "cuidado", "salud", "farmacia", "droga", "higiene"], "heart.text.square.fill"),
+            (["mascota", "perro", "gato"], "pawprint.fill"),
+            (["bebe", "nino", "infantil", "juguete"], "teddybear.fill"),
+            (["ropa", "moda", "calzado", "zapato", "accesorio"], "tshirt.fill"),
+            (["tecnolog", "electr", "celular", "computo"], "desktopcomputer"),
+            (["ferreter", "herramienta", "construccion"], "hammer.fill"),
+            (["papeler", "oficina", "libro", "escolar"], "pencil.and.ruler.fill"),
+            (["deporte", "gimnasio", "fitness"], "figure.run"),
+            (["flor", "regalo", "jardin"], "gift.fill"),
+            (["comida", "almuerzo", "desayuno", "cena", "restaurante", "plato", "menu"], "fork.knife"),
+            (["abarrote", "mercado", "supermercado", "despensa", "granos"], "basket.fill"),
+        ]
+        for (words, symbol) in rules where words.contains(where: { key.contains($0) }) { return symbol }
+        return "tag.fill"
+    }
 }
 
 struct MarketRating: Hashable {

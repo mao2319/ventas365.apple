@@ -15,7 +15,7 @@ enum MarketAPI {
 
     enum APIError: Error { case badResponse }
 
-    private static func get<T: Decodable>(_ table: String, _ items: [URLQueryItem]) async throws -> T {
+    static func get<T: Decodable>(_ table: String, _ items: [URLQueryItem]) async throws -> T {
         var components = URLComponents(url: baseURL.appendingPathComponent("rest/v1/\(table)"), resolvingAgainstBaseURL: false)!
         components.queryItems = items
         var request = URLRequest(url: components.url!)
@@ -49,7 +49,7 @@ enum MarketAPI {
         }
     }
 
-    private static let storeColumns = "store_id,name,logo_url,cover_url,department,city,address,phone_number,country_iso,currency_code,delivery_time_min,delivery_time_max,delivery_cost,minimum_order,latitude,longitude"
+    private static let storeColumns = "store_id,name,logo_url,cover_url,department,city,address,phone_number,country_iso,currency_code,delivery_time_min,delivery_time_max,delivery_cost,minimum_order,latitude,longitude,phone_country_iso,instagram_handle,instagram_url,address_for_map,business_hours"
 
     /// Una tienda del Market por su id.
     static func store(storeId: String) async throws -> MarketStore? {
@@ -300,5 +300,289 @@ enum MarketAPI {
         let response: PurchasesResponse = try await invoke("market-customer-purchases", TokenBody(token: token))
         guard response.success == true else { throw APIError.badResponse }
         return response.purchases ?? []
+    }
+
+    // MARK: - Favoritos
+
+    /// Llamada genérica a PostgREST para escrituras (favoritos del dispositivo).
+    @discardableResult
+    private static func rest(_ method: String, _ table: String, _ items: [URLQueryItem], body: Data? = nil, prefer: String? = nil) async throws -> Data {
+        var components = URLComponents(url: baseURL.appendingPathComponent("rest/v1/\(table)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = items.isEmpty ? nil : items
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = method
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+        request.httpBody = body
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.badResponse
+        }
+        return data
+    }
+
+    struct FavoriteSnapshot {
+        var stores: Set<String> = []
+        var products: Set<String> = []
+    }
+
+    static func favoriteKey(_ storeId: String, _ code: String) -> String { "\(storeId)|\(code)" }
+
+    private struct FavStoreRow: Decodable { let storeId: String }
+    private struct FavProductRow: Decodable { let storeId: String; let productCode: String }
+
+    /// Favoritos de quien no ha iniciado sesión: se guardan con el id del dispositivo.
+    static func deviceFavorites(anonId: String) async throws -> FavoriteSnapshot {
+        async let storeRows: [FavStoreRow] = get("store_favorites", [
+            URLQueryItem(name: "select", value: "store_id"),
+            URLQueryItem(name: "anon_id", value: "eq.\(anonId)"),
+        ])
+        async let productRows: [FavProductRow] = get("product_favorites", [
+            URLQueryItem(name: "select", value: "store_id,product_code"),
+            URLQueryItem(name: "anon_id", value: "eq.\(anonId)"),
+        ])
+        let stores = try await storeRows
+        let products = try await productRows
+        return FavoriteSnapshot(
+            stores: Set(stores.map(\.storeId)),
+            products: Set(products.map { favoriteKey($0.storeId, $0.productCode) })
+        )
+    }
+
+    private struct DeviceStoreFavorite: Encodable {
+        let storeId: String
+        let anonId: String
+        enum CodingKeys: String, CodingKey { case storeId = "store_id", anonId = "anon_id" }
+    }
+
+    private struct DeviceProductFavorite: Encodable {
+        let storeId: String
+        let productCode: String
+        let anonId: String
+        enum CodingKeys: String, CodingKey { case storeId = "store_id", productCode = "product_code", anonId = "anon_id" }
+    }
+
+    static func setDeviceStoreFavorite(storeId: String, anonId: String, on: Bool) async throws {
+        if on {
+            let body = try JSONEncoder().encode(DeviceStoreFavorite(storeId: storeId, anonId: anonId))
+            try await rest("POST", "store_favorites", [URLQueryItem(name: "on_conflict", value: "store_id,anon_id")], body: body, prefer: "resolution=ignore-duplicates,return=minimal")
+        } else {
+            try await rest("DELETE", "store_favorites", [
+                URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+                URLQueryItem(name: "anon_id", value: "eq.\(anonId)"),
+            ])
+        }
+    }
+
+    static func setDeviceProductFavorite(storeId: String, code: String, anonId: String, on: Bool) async throws {
+        if on {
+            let body = try JSONEncoder().encode(DeviceProductFavorite(storeId: storeId, productCode: code, anonId: anonId))
+            try await rest("POST", "product_favorites", [URLQueryItem(name: "on_conflict", value: "store_id,product_code,anon_id")], body: body, prefer: "resolution=ignore-duplicates,return=minimal")
+        } else {
+            try await rest("DELETE", "product_favorites", [
+                URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+                URLQueryItem(name: "product_code", value: "eq.\(code)"),
+                URLQueryItem(name: "anon_id", value: "eq.\(anonId)"),
+            ])
+        }
+    }
+
+    private struct FavoritesRequest: Encodable {
+        let action: String
+        let token: String
+        var kind: String?
+        var storeId: String?
+        var productCode: String?
+        var on: Bool?
+        var anonId: String?
+    }
+
+    private struct FavoritesResponse: Decodable {
+        struct Product: Decodable { let storeId: String; let productCode: String }
+        let success: Bool?
+        let stores: [String]?
+        let products: [Product]?
+    }
+
+    /// Favoritos de la cuenta (función `market-favorites`).
+    static func accountFavorites(token: String) async throws -> FavoriteSnapshot {
+        let response: FavoritesResponse = try await invoke("market-favorites", FavoritesRequest(action: "list", token: token))
+        guard response.success == true else { throw APIError.badResponse }
+        return FavoriteSnapshot(
+            stores: Set(response.stores ?? []),
+            products: Set((response.products ?? []).map { favoriteKey($0.storeId, $0.productCode) })
+        )
+    }
+
+    static func setAccountFavorite(token: String, kind: String, storeId: String, code: String?, on: Bool) async throws {
+        let response: FavoritesResponse = try await invoke(
+            "market-favorites",
+            FavoritesRequest(action: "toggle", token: token, kind: kind, storeId: storeId, productCode: code, on: on)
+        )
+        guard response.success == true else { throw APIError.badResponse }
+    }
+
+    /// Pasa los favoritos que el dispositivo tenía sin sesión a la cuenta.
+    static func mergeDeviceFavorites(token: String, anonId: String) async {
+        let _: FavoritesResponse? = try? await invoke("market-favorites", FavoritesRequest(action: "merge", token: token, anonId: anonId))
+    }
+
+    private struct TopFavoriteRow: Decodable {
+        let storeId: String
+        let productCode: String
+        let description: String
+        let unitPrice: Double
+        let compareAtPrice: Double?
+        let imageUrl: String?
+        let storeName: String
+        let favoriteCount: Int
+    }
+
+    /// Productos con más favoritos entre todos los clientes.
+    static func topFavorites(limit: Int) async throws -> [MostSearchedProduct] {
+        let rows: [TopFavoriteRow] = try await rpc("top_favorite_products", LimitBody(limitCount: limit))
+        return rows.map {
+            MostSearchedProduct(storeId: $0.storeId, productCode: $0.productCode, description: $0.description,
+                                unitPrice: $0.unitPrice, compareAtPrice: $0.compareAtPrice, imageUrl: $0.imageUrl,
+                                storeName: $0.storeName, searchCount: $0.favoriteCount)
+        }
+    }
+
+    // MARK: - Ficha de la tienda
+
+    struct StoreDeliveryApp: Decodable, Identifiable, Hashable {
+        let id: String
+        let platform: String
+        let url: String
+
+        var name: String {
+            let key = platform.lowercased()
+            if key.contains("rappi") { return "Rappi" }
+            if key.contains("didi") { return "DiDi Food" }
+            if key.contains("pedidos") { return "PedidosYa" }
+            if key.contains("ifood") { return "iFood" }
+            if key.contains("uber") { return "Uber Eats" }
+            return platform.capitalized
+        }
+    }
+
+    /// Enlaces de la tienda en apps de domicilio.
+    static func deliveryApps(storeId: String) async throws -> [StoreDeliveryApp] {
+        try await get("store_delivery_apps", [
+            URLQueryItem(name: "select", value: "id,platform,url"),
+            URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+            URLQueryItem(name: "order", value: "created_at"),
+        ])
+    }
+
+    /// Medio de pago digital configurado por la tienda (número o llave, y QR).
+    struct StorePaymentInfo: Decodable, Identifiable, Hashable {
+        let method: String
+        let accountLabel: String?
+        let qrImageUrl: String?
+        let enabled: Bool
+
+        var id: String { method }
+    }
+
+    static func paymentInfo(storeId: String) async throws -> [StorePaymentInfo] {
+        let rows: [StorePaymentInfo] = try await get("store_payment_methods", [
+            URLQueryItem(name: "select", value: "method,account_label,qr_image_url,enabled"),
+            URLQueryItem(name: "store_id", value: "eq.\(storeId)"),
+        ])
+        return rows.filter { $0.enabled && !((($0.accountLabel ?? "").isEmpty) && (($0.qrImageUrl ?? "").isEmpty)) }
+    }
+
+    // MARK: - Calificaciones
+
+    struct PublicRating: Decodable, Identifiable, Hashable {
+        let id: String
+        let rating: Int
+        let comment: String?
+        let createdAt: String
+        let firstName: String
+    }
+
+    private struct StoreIdBody: Encodable { let storeId: String }
+    private struct PublicRatingsResponse: Decodable { let ratings: [PublicRating]? }
+
+    static func publicRatings(storeId: String) async throws -> [PublicRating] {
+        let response: PublicRatingsResponse = try await invoke("list-public-store-ratings", StoreIdBody(storeId: storeId))
+        return response.ratings ?? []
+    }
+
+    private struct RateBody: Encodable { let token: String; let storeId: String; let rating: Int; let comment: String }
+    struct SimpleResponse: Decodable { let success: Bool?; let error: String? }
+
+    /// Envía o actualiza la calificación del cliente; la tienda la revisa antes de publicarla.
+    static func submitRating(token: String, storeId: String, rating: Int, comment: String) async throws -> SimpleResponse {
+        try await invoke("submit-store-rating", RateBody(token: token, storeId: storeId, rating: rating, comment: comment))
+    }
+
+    // MARK: - Perfil y comprobantes del cliente
+
+    private struct ProfileBody: Encodable {
+        let token: String
+        let alternatePhoneCountryIso: String?
+        let alternatePhone: String?
+        let avatarUrl: String?
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(token, forKey: .token)
+            try container.encode(alternatePhoneCountryIso, forKey: .alternatePhoneCountryIso)
+            try container.encode(alternatePhone, forKey: .alternatePhone)
+            try container.encode(avatarUrl, forKey: .avatarUrl)
+        }
+
+        enum CodingKeys: String, CodingKey { case token, alternatePhoneCountryIso, alternatePhone, avatarUrl }
+    }
+
+    struct ProfileResponse: Decodable {
+        let success: Bool?
+        let error: String?
+        let customer: MarketCustomer?
+    }
+
+    /// Guarda foto y celular alternativo (los datos principales los cambia soporte).
+    static func updateProfile(token: String, alternatePhoneCountryIso: String?, alternatePhone: String?, avatarUrl: String?) async throws -> ProfileResponse {
+        try await invoke("market-customer-update-profile", ProfileBody(
+            token: token, alternatePhoneCountryIso: alternatePhoneCountryIso, alternatePhone: alternatePhone, avatarUrl: avatarUrl
+        ))
+    }
+
+    /// Sube la foto de perfil al almacenamiento público y devuelve su URL.
+    static func uploadAvatar(customerId: String, jpeg: Data) async throws -> String {
+        let path = "\(customerId)/avatar-\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
+        var request = URLRequest(url: baseURL.appendingPathComponent("storage/v1/object/market-customer-avatars/\(path)"))
+        request.httpMethod = "POST"
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("3600", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = jpeg
+        request.timeoutInterval = 60
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.badResponse
+        }
+        return baseURL.appendingPathComponent("storage/v1/object/public/market-customer-avatars/\(path)").absoluteString
+    }
+
+    private struct ProofsRequest: Encodable { let action: String; let token: String }
+    struct ProofsResponse: Decodable { let success: Bool?; let proofs: [PaymentProof]? }
+
+    static func paymentProofs(token: String) async throws -> [PaymentProof] {
+        let response: ProofsResponse = try await invoke("payment-proofs", ProofsRequest(action: "mine", token: token))
+        guard response.success == true else { throw APIError.badResponse }
+        return response.proofs ?? []
+    }
+
+    /// Marca como leídas las respuestas de las tiendas a los comprobantes.
+    static func markProofsSeen(token: String) async {
+        let _: SimpleResponse? = try? await invoke("payment-proofs", ProofsRequest(action: "seen", token: token))
     }
 }

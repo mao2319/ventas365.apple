@@ -654,7 +654,7 @@ struct MyOrdersScreen: View {
     }
 }
 
-private struct PurchaseRow: View {
+struct PurchaseRow: View {
     let purchase: CustomerPurchase
     let language: AppLanguage
 
@@ -676,7 +676,7 @@ private struct PurchaseRow: View {
     }
 }
 
-private struct PurchaseDetail: View {
+struct PurchaseDetail: View {
     let purchase: CustomerPurchase
     let language: AppLanguage
 

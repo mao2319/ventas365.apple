@@ -7,6 +7,7 @@ struct HubText {
 
     var home: String { pick("Inicio", "Home") }
     var search: String { pick("Buscar", "Search") }
+    var favorites: String { pick("Favoritos", "Favorites") }
     var cart: String { pick("Carrito", "Cart") }
     var account: String { pick("Cuenta", "Account") }
     var cartEmptyTitle: String { pick("Tu carrito está vacío", "Your cart is empty") }
@@ -28,7 +29,7 @@ struct HubText {
 }
 
 enum HubTab: Hashable {
-    case home, search, cart, account
+    case home, search, favorites, cart, account
 }
 
 /// Pestaña activa del Market; las pantallas internas la usan para saltar al carrito.
@@ -46,6 +47,7 @@ struct MarketHub: View {
     @StateObject private var cart = MarketCart()
     @StateObject private var session = MarketSession()
     @StateObject private var nav = MarketNav()
+    @StateObject private var favorites = MarketFavorites()
 
     var body: some View {
         let text = HubText(language: language)
@@ -56,6 +58,9 @@ struct MarketHub: View {
             SearchScreen(language: language)
                 .tabItem { Label(text.search, systemImage: "magnifyingglass") }
                 .tag(HubTab.search)
+            FavoritesScreen(language: language)
+                .tabItem { Label(text.favorites, systemImage: "heart") }
+                .tag(HubTab.favorites)
             CartScreen(language: language)
                 .tabItem { Label(text.cart, systemImage: "cart") }
                 .tag(HubTab.cart)
@@ -69,7 +74,16 @@ struct MarketHub: View {
         .environmentObject(cart)
         .environmentObject(session)
         .environmentObject(nav)
+        .environmentObject(favorites)
         .task { await session.refresh() }
+        // Favoritos de la cuenta al entrar; los del dispositivo pasan a ella.
+        .task(id: session.customer?.id) {
+            if let token = session.token, session.isSignedIn {
+                await favorites.attach(token: token)
+            } else {
+                await favorites.reload(token: nil)
+            }
+        }
     }
 }
 
@@ -202,28 +216,59 @@ struct AccountScreen: View {
     let language: AppLanguage
 
     @EnvironmentObject private var session: MarketSession
+    @StateObject private var proofs = PaymentProofsModel()
 
     var body: some View {
         let text = HubText(language: language)
         NavigationStack {
             Group {
                 if let customer = session.customer {
+                    let info = AccountText(language: language)
                     List {
                         Section {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(text.hello), \(customer.fullName)").font(.system(size: 17, weight: .semibold))
-                                Text(customer.email).font(.system(size: 14)).foregroundColor(.inkMuted)
+                            HStack(spacing: 14) {
+                                AvatarView(customer: customer, size: 64)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(customer.fullName).font(.system(size: 18, weight: .bold))
+                                    Text(customer.email).font(.system(size: 14)).foregroundColor(.inkMuted)
+                                }
                             }
                             .padding(.vertical, 4)
                         }
                         Section {
-                            NavigationLink(text.myOrders) { MyOrdersScreen(language: language) }
+                            if !customer.phoneLabel.isEmpty {
+                                LabeledContent { Text(customer.phoneLabel) } label: { Label(info.phone, systemImage: "phone") }
+                            }
+                            if let document = customer.documentNumber, !document.isEmpty {
+                                LabeledContent { Text(document) } label: { Label(info.document, systemImage: "person.text.rectangle") }
+                            }
+                            if let city = customer.city, !city.isEmpty {
+                                LabeledContent { Text(city) } label: { Label(info.city, systemImage: "mappin.and.ellipse") }
+                            }
+                        }
+                        if !proofs.proofs.isEmpty {
+                            Section {
+                                ForEach(proofs.proofs.prefix(3)) { proof in
+                                    NavigationLink { ProofDetail(proof: proof, language: language) } label: {
+                                        ProofRow(proof: proof, language: language)
+                                    }
+                                }
+                            } header: {
+                                Label(info.myProofs.uppercased(), systemImage: "doc.text")
+                            }
+                        }
+                        Section {
+                            NavigationLink { ProfileScreen(language: language) } label: { Label(info.myInfo, systemImage: "person") }
+                            NavigationLink { MyOrdersScreen(language: language) } label: { Label(info.myPurchases, systemImage: "bag") }
+                            NavigationLink { PaymentProofsScreen(language: language) } label: { Label(info.myProofs, systemImage: "doc.text") }
                         }
                         Section {
                             Button(text.signOut, role: .destructive) { session.signOut() }
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .task(id: customer.id) { await proofs.load(token: session.token) }
+                    .refreshable { await proofs.load(token: session.token) }
                 } else {
                     ScrollView { AccountWelcome(language: language) }
                 }
