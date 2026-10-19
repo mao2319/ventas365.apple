@@ -27,10 +27,13 @@ struct AuthText {
     var needEmail: String { pick("Escribe tu correo para recuperar tu contraseña.", "Enter your email to recover your password.") }
     var resetSent: String { pick("Si el correo existe, te enviamos un enlace para cambiar tu contraseña.", "If the email exists, we sent you a link to reset your password.") }
     var country: String { pick("País", "Country") }
+    var createAccount: String { pick("Crear cuenta", "Create account") }
+    var noAccount: String { pick("¿No tienes cuenta?", "Don't have an account?") }
 }
 
 enum AuthRoute: Hashable {
     case login
+    case register
 }
 
 /// Bandera a partir del código ISO de dos letras.
@@ -75,6 +78,12 @@ struct AccountWelcome: View {
                     .frame(maxWidth: .infinity, minHeight: 28)
             }
             .modifier(PrimaryActionStyle())
+            NavigationLink(value: AuthRoute.register) {
+                Text(text.createAccount)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.brandOrange)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 24)
@@ -151,6 +160,15 @@ struct LoginScreen: View {
                 }
                 .modifier(PrimaryActionStyle())
                 .disabled(!canSubmit || working)
+
+                HStack(spacing: 6) {
+                    Text(text.noAccount).foregroundColor(.inkMuted)
+                    NavigationLink(destination: RegisterScreen(language: language)) {
+                        Text(text.createAccount).fontWeight(.semibold).foregroundColor(.brandOrange)
+                    }
+                }
+                .font(.system(size: 15))
+                .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 32)

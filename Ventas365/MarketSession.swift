@@ -68,16 +68,7 @@ struct DialCountry: Identifiable, Hashable {
     let dialCode: String
     var id: String { iso2 }
 
-    static let common: [DialCountry] = [
-        DialCountry(iso2: "CO", name: "Colombia", dialCode: "+57"),
-        DialCountry(iso2: "MX", name: "México", dialCode: "+52"),
-        DialCountry(iso2: "PE", name: "Perú", dialCode: "+51"),
-        DialCountry(iso2: "EC", name: "Ecuador", dialCode: "+593"),
-        DialCountry(iso2: "CL", name: "Chile", dialCode: "+56"),
-        DialCountry(iso2: "AR", name: "Argentina", dialCode: "+54"),
-        DialCountry(iso2: "US", name: "Estados Unidos", dialCode: "+1"),
-        DialCountry(iso2: "ES", name: "España", dialCode: "+34"),
-    ]
+    static var common: [DialCountry] { all }
 }
 
 private struct LoginResponse: Decodable {
@@ -113,6 +104,37 @@ private struct ResetBody: Encodable {
 private struct ResetResponse: Decodable {
     let success: Bool?
 }
+
+struct RegisterData: Encodable {
+    var fullName = ""
+    var documentNumber = ""
+    var countryIso = "CO"
+    var phone = ""
+    var department = ""
+    var city = ""
+    var address = ""
+    var email = ""
+    var password = ""
+}
+
+private struct RegisterResponse: Decodable {
+    let success: Bool?
+    let field: String?
+    let error: String?
+    let customer: MarketCustomer?
+    let sessionToken: String?
+}
+
+private struct BasicResponse: Decodable {
+    let success: Bool?
+    let error: String?
+}
+
+private struct ExistsResponse: Decodable { let exists: Bool? }
+private struct CheckBody: Encodable { let field: String; let value: String; let countryIso: String? }
+private struct CodeRequest: Encodable { let email: String; let language: String }
+private struct CodeVerify: Encodable { let email: String; let code: String }
+private struct DeleteBody: Encodable { let token: String; let password: String }
 
 private struct TokenBody: Encodable {
     let token: String
@@ -188,6 +210,56 @@ final class MarketSession: ObservableObject {
             ResetBody(email: email, language: language.rawValue)
         )
         return response?.success == true
+    }
+
+    // MARK: Registro y baja de la cuenta
+
+    struct RegisterError: Error {
+        let field: String?
+        let message: String
+    }
+
+    /// Dice si ya existe una cuenta con ese dato (`market-customer-check`).
+    func exists(field: String, value: String, countryIso: String? = nil) async -> Bool {
+        let response: ExistsResponse? = try? await MarketAPI.invoke("market-customer-check", CheckBody(field: field, value: value, countryIso: countryIso))
+        return response?.exists == true
+    }
+
+    /// Envía el código de 4 dígitos al correo. Devuelve el error, o nil si salió bien.
+    func requestRegistrationCode(email: String, language: AppLanguage) async -> String? {
+        let response: BasicResponse? = try? await MarketAPI.invoke("market-request-registration-code", CodeRequest(email: email, language: language.rawValue))
+        if response?.success == true { return nil }
+        return response?.error ?? "network"
+    }
+
+    /// Confirma el código. Devuelve el error, o nil si es correcto.
+    func verifyRegistrationCode(email: String, code: String) async -> String? {
+        let response: BasicResponse? = try? await MarketAPI.invoke("market-verify-registration-code", CodeVerify(email: email, code: code))
+        if response?.success == true { return nil }
+        return response?.error ?? "network"
+    }
+
+    /// Crea la cuenta y deja la sesión iniciada.
+    func register(_ data: RegisterData) async throws {
+        let response: RegisterResponse
+        do {
+            response = try await MarketAPI.invoke("market-customer-register", data)
+        } catch {
+            throw RegisterError(field: nil, message: "network")
+        }
+        guard response.success == true, let customer = response.customer, let token = response.sessionToken else {
+            throw RegisterError(field: response.field, message: response.error ?? "network")
+        }
+        store(token: token, customer: customer)
+    }
+
+    /// Elimina la cuenta (pide la contraseña). Devuelve el error, o nil si se eliminó.
+    func deleteAccount(password: String) async -> String? {
+        guard let token else { return "session" }
+        let response: BasicResponse? = try? await MarketAPI.invoke("market-customer-delete", DeleteBody(token: token, password: password))
+        guard response?.success == true else { return response?.error ?? "network" }
+        signOut()
+        return nil
     }
 
     /// Guarda los datos nuevos del perfil que devolvió el servidor.

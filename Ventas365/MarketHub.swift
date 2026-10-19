@@ -217,6 +217,7 @@ struct AccountScreen: View {
 
     @EnvironmentObject private var session: MarketSession
     @StateObject private var proofs = PaymentProofsModel()
+    @State private var confirmDelete = false
 
     var body: some View {
         let text = HubText(language: language)
@@ -265,6 +266,9 @@ struct AccountScreen: View {
                         Section {
                             Button(text.signOut, role: .destructive) { session.signOut() }
                         }
+                        Section {
+                            Button(info.deleteAccount, role: .destructive) { confirmDelete = true }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .task(id: customer.id) { await proofs.load(token: session.token) }
@@ -275,9 +279,13 @@ struct AccountScreen: View {
             }
             .background(Color.paper.ignoresSafeArea())
             .navigationTitle(text.account)
-            .navigationDestination(for: AuthRoute.self) { _ in
-                LoginScreen(language: language)
+            .navigationDestination(for: AuthRoute.self) { route in
+                switch route {
+                case .login: LoginScreen(language: language)
+                case .register: RegisterScreen(language: language)
+                }
             }
+            .sheet(isPresented: $confirmDelete) { DeleteAccountSheet(language: language) }
         }
     }
 }

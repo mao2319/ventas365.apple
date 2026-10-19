@@ -83,6 +83,7 @@ struct AccountText {
     var email: String { pick("Email", "Email") }
     var fullName: String { pick("Nombre completo", "Full name") }
     var myInfo: String { pick("Ver mi información", "My information") }
+    var deleteAccount: String { pick("Eliminar mi cuenta", "Delete my account") }
     var myPurchases: String { pick("Mis compras", "My purchases") }
     var myProofs: String { pick("Mis comprobantes de pago", "My payment proofs") }
     var changePhoto: String { pick("Cambiar foto", "Change photo") }
@@ -565,5 +566,67 @@ struct ActiveOrdersRail: View {
             }
         }
         .task(id: session.customer?.id) { await model.load(token: session.token) }
+    }
+}
+
+// MARK: - Eliminar cuenta
+
+/// Confirmación con contraseña para eliminar la cuenta (lo exigen Apple y Google).
+struct DeleteAccountSheet: View {
+    let language: AppLanguage
+
+    @EnvironmentObject private var session: MarketSession
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var working = false
+    @State private var message: String?
+
+    private func pick(_ es: String, _ en: String) -> String { language == .es ? es : en }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(pick(
+                        "Se eliminarán tu perfil, direcciones, favoritos, calificaciones y comprobantes. Los pedidos que ya enviaste quedan en el historial de cada tienda. Esta acción no se puede deshacer.",
+                        "Your profile, addresses, favorites, ratings and payment proofs will be deleted. Orders you already sent stay in each store's history. This can't be undone."
+                    ))
+                    .font(.system(size: 14))
+                }
+                Section(pick("Confirma con tu contraseña", "Confirm with your password")) {
+                    SecureField(pick("Contraseña", "Password"), text: $password)
+                        .textContentType(.password)
+                    if let message {
+                        Text(message).font(.system(size: 14)).foregroundColor(.red)
+                    }
+                }
+                Section {
+                    Button(role: .destructive) { Task { await delete() } } label: {
+                        HStack {
+                            Spacer()
+                            if working { ProgressView() } else { Text(pick("Eliminar mi cuenta", "Delete my account")).font(.system(size: 17, weight: .semibold)) }
+                            Spacer()
+                        }
+                    }
+                    .disabled(password.isEmpty || working)
+                }
+            }
+            .navigationTitle(pick("Eliminar cuenta", "Delete account"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(pick("Cancelar", "Cancel")) { dismiss() } }
+            }
+        }
+    }
+
+    private func delete() async {
+        working = true
+        message = nil
+        defer { working = false }
+        if let error = await session.deleteAccount(password: password) {
+            message = error == "network" ? pick("No pudimos conectarnos. Inténtalo de nuevo.", "We couldn't connect. Try again.") : error
+        } else {
+            dismiss()
+        }
     }
 }
