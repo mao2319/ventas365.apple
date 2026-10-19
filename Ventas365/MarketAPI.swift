@@ -581,6 +581,23 @@ enum MarketAPI {
         return response.proofs ?? []
     }
 
+    /// Compra del cliente en una tienda a la que puede asociar un comprobante.
+    struct ProofOrderOption: Decodable, Identifiable, Hashable {
+        let kind: String
+        let ref: String
+        let orderNumber: Int?
+        let total: Double
+        let date: String
+        var id: String { "\(kind):\(ref)" }
+    }
+    private struct ProofOrdersRequest: Encodable { let action = "orders"; let token: String; let storeId: String }
+    private struct ProofOrdersResponse: Decodable { let success: Bool?; let orders: [ProofOrderOption]? }
+
+    static func proofOrders(token: String, storeId: String) async -> [ProofOrderOption] {
+        let response: ProofOrdersResponse? = try? await invoke("payment-proofs", ProofOrdersRequest(token: token, storeId: storeId))
+        return response?.orders ?? []
+    }
+
     /// Marca como leídas las respuestas de las tiendas a los comprobantes.
     static func markProofsSeen(token: String) async {
         let _: SimpleResponse? = try? await invoke("payment-proofs", ProofsRequest(action: "seen", token: token))
@@ -646,8 +663,10 @@ enum MarketAPI {
         field("token", token)
         field("storeId", storeId)
         field("method", method)
-        field("orderKind", orderKind)
-        field("orderRef", orderRef)
+        if !orderKind.isEmpty && !orderRef.isEmpty {
+            field("orderKind", orderKind)
+            field("orderRef", orderRef)
+        }
         if let amount { field("amount", String(Int(amount.rounded()))) }
         if !note.isEmpty { field("note", note) }
         body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"comprobante.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n".utf8))

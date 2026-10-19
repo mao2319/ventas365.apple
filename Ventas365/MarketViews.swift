@@ -18,7 +18,7 @@ private struct MarketText {
     var errorTitle: String { pick("No pudimos cargar las tiendas", "We couldn't load the stores") }
     var errorBody: String { pick("Revisa tu conexión e inténtalo de nuevo.", "Check your connection and try again.") }
     var retry: String { pick("Reintentar", "Try again") }
-    var appHome: String { pick("Inicio de la app", "App home") }
+    var appHome: String { pick("Inicio", "Home") }
     var productsError: String { pick("No pudimos cargar los productos.", "We couldn't load the products.") }
     var noProducts: String { pick("Esta tienda aún no tiene productos disponibles.", "This store has no products available yet.") }
     var noMatches: String { pick("No hay productos con esa búsqueda.", "No products match your search.") }
@@ -90,7 +90,7 @@ final class MarketHomeModel: ObservableObject {
 /// El pedido se genera dentro de la app (pestaña Carrito).
 struct MarketScreen: View {
     let language: AppLanguage
-    let onExit: () -> Void
+    let onNavigate: (AppSection?) -> Void
 
     @StateObject private var model = MarketHomeModel()
     @EnvironmentObject private var favorites: MarketFavorites
@@ -105,8 +105,12 @@ struct MarketScreen: View {
                 .navigationBarTitleDisplayMode(.large)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: onExit) { Image(systemName: "house") }
-                            .accessibilityLabel(text.appHome)
+                        Menu {
+                            Button { onNavigate(nil) } label: { Label(text.appHome, systemImage: "house") }
+                            Button { onNavigate(.negocios) } label: { Label(language == .es ? "Negocios" : "Business", systemImage: "briefcase") }
+                            Button { onNavigate(.domicilios) } label: { Label(language == .es ? "Domicilios" : "Deliveries", systemImage: "bicycle") }
+                        } label: { Image(systemName: "house") }
+                        .accessibilityLabel(text.appHome)
                     }
                 }
                 .navigationDestination(for: MarketStore.self) { store in
@@ -153,7 +157,6 @@ struct MarketScreen: View {
         case .loaded:
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    ActiveOrdersRail(language: language)
                     if !model.categories.isEmpty {
                         railHeader(text.categories, action: text.seeAllFeminine, route: .allCategories)
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -167,20 +170,7 @@ struct MarketScreen: View {
                         }
                         .padding(.top, -12)
                     }
-                    if !model.trending.isEmpty {
-                        Text(SearchText(language: language).trending)
-                            .font(.system(size: 22, weight: .bold))
-                            .padding(.horizontal, 16)
-                        TrendingRail(items: model.trending, stores: model.stores, language: language) { detail = $0 }
-                            .padding(.top, -12)
-                    }
-                    if !model.topFavorites.isEmpty {
-                        Text(text.favoriteProducts)
-                            .font(.system(size: 22, weight: .bold))
-                            .padding(.horizontal, 16)
-                        TrendingRail(items: model.topFavorites, stores: model.stores, language: language) { detail = $0 }
-                            .padding(.top, -12)
-                    }
+                    ActiveOrdersRail(language: language)
                     railHeader(text.stores, action: text.seeAll, route: .allStores)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 14) {
@@ -198,6 +188,20 @@ struct MarketScreen: View {
                         .padding(.horizontal, 16)
                     }
                     .padding(.top, -12)
+                    if !model.trending.isEmpty {
+                        Text(SearchText(language: language).trending)
+                            .font(.system(size: 22, weight: .bold))
+                            .padding(.horizontal, 16)
+                        TrendingRail(items: model.trending, stores: model.stores, language: language) { detail = $0 }
+                            .padding(.top, -12)
+                    }
+                    if !model.topFavorites.isEmpty {
+                        Text(text.favoriteProducts)
+                            .font(.system(size: 22, weight: .bold))
+                            .padding(.horizontal, 16)
+                        TrendingRail(items: model.topFavorites, stores: model.stores, language: language) { detail = $0 }
+                            .padding(.top, -12)
+                    }
                 }
                 .padding(.vertical, 8)
             }

@@ -519,6 +519,7 @@ struct ActiveOrdersRail: View {
     let language: AppLanguage
 
     @EnvironmentObject private var session: MarketSession
+    @EnvironmentObject private var nav: MarketNav
     @StateObject private var model = MyOrdersModel()
 
     private var active: [CustomerPurchase] {
@@ -531,7 +532,7 @@ struct ActiveOrdersRail: View {
         Group {
             if !active.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(language == .es ? "Pedidos en progreso" : "Orders in progress")
+                    Text(language == .es ? "Órdenes en progreso" : "Orders in progress")
                         .font(.system(size: 22, weight: .bold))
                         .padding(.horizontal, 16)
                     ForEach(active) { purchase in
@@ -565,7 +566,8 @@ struct ActiveOrdersRail: View {
                 }
             }
         }
-        .task(id: session.customer?.id) { await model.load(token: session.token) }
+        // Se recarga al volver a la pestaña de inicio, para ver pedidos recién enviados.
+        .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") { await model.load(token: session.token) }
     }
 }
 

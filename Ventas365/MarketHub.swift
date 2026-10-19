@@ -42,7 +42,8 @@ final class MarketNav: ObservableObject {
 /// favoritos) se suman en las siguientes etapas del plan.
 struct MarketHub: View {
     let language: AppLanguage
-    let onExit: () -> Void
+    /// nil vuelve al inicio de la app; si no, abre esa sección.
+    let onNavigate: (AppSection?) -> Void
 
     @StateObject private var cart = MarketCart()
     @StateObject private var session = MarketSession()
@@ -52,7 +53,7 @@ struct MarketHub: View {
     var body: some View {
         let text = HubText(language: language)
         TabView(selection: $nav.tab) {
-            MarketScreen(language: language, onExit: onExit)
+            MarketScreen(language: language, onNavigate: onNavigate)
                 .tabItem { Label(text.home, systemImage: "storefront") }
                 .tag(HubTab.home)
             SearchScreen(language: language)
@@ -88,12 +89,12 @@ struct MarketHub: View {
 }
 
 /// Con iOS 26 la barra de pestañas, las barras de navegación y la búsqueda ya
-/// usan Liquid Glass sin hacer nada; aquí solo se pide que la barra de
-/// pestañas se compacte al desplazar. En versiones anteriores no cambia.
+/// usan Liquid Glass sin hacer nada. La barra de pestañas queda siempre
+/// visible (sin compactarse al desplazar).
 struct LiquidGlassTabs: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
+            content.tabBarMinimizeBehavior(.never)
         } else {
             content
         }

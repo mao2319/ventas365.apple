@@ -28,7 +28,7 @@ struct RootView: View {
         ZStack {
             if section == .market {
                 // Market nativo: el pedido se genera en la app, sin pasar por el sitio.
-                MarketHub(language: web.language, onExit: { section = nil })
+                MarketHub(language: web.language, onNavigate: { section = $0 })
             } else if let section {
                 WebScreen(web: web, section: section, onExit: { self.section = nil })
             } else {

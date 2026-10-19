@@ -142,7 +142,7 @@ struct PurchaseDetail: View {
         .sheet(isPresented: $showChat) {
             if let id = purchase.delivery?.id { DeliveryChatSheet(deliveryId: id, language: language) }
         }
-        .sheet(isPresented: $showProof) { PaymentProofSheet(purchase: purchase, language: language) }
+        .sheet(isPresented: $showProof) { PaymentProofSheet(storeId: purchase.storeId, purchase: purchase, language: language) }
     }
 
     // MARK: Piezas
@@ -377,6 +377,10 @@ struct DeliveryChatSheet: View {
             .navigationTitle(text.chat)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(text.close) { dismiss() } } }
+            .task {
+                guard let token = session.token else { return }
+                orders = await MarketAPI.proofOrders(token: token, storeId: storeId)
+            }
             .onChange(of: picked) { item in
                 guard let item else { return }
                 Task {
@@ -456,7 +460,7 @@ struct DeliveryChatSheet: View {
 // MARK: - Comprobante de pago
 
 struct PaymentProofSheet: View {
-    let purchase: CustomerPurchase
+    let storeId: String
     let language: AppLanguage
 
     @EnvironmentObject private var session: MarketSession
@@ -470,14 +474,22 @@ struct PaymentProofSheet: View {
     @State private var working = false
     @State private var message: String?
     @State private var failed = false
+    @State private var orders: [MarketAPI.ProofOrderOption] = []
+    @State private var orderId: String
 
-    init(purchase: CustomerPurchase, language: AppLanguage) {
-        self.purchase = purchase
+    /// Desde el seguimiento del pedido (`purchase`) llega con la compra elegida;
+    /// desde "Medios de pago" de la tienda, con el medio y sin compra.
+    init(storeId: String, purchase: CustomerPurchase? = nil, initialMethod: String? = nil, language: AppLanguage) {
+        self.storeId = storeId
         self.language = language
         let qr = ["NEQUI", "DAVIPLATA", "LLAVE_BREB"]
-        _method = State(initialValue: qr.contains(purchase.paymentMethod ?? "") ? purchase.paymentMethod! : "NEQUI")
-        _amount = State(initialValue: String(Int(purchase.total.rounded())))
+        let preferred = purchase?.paymentMethod ?? initialMethod ?? ""
+        _method = State(initialValue: qr.contains(preferred) ? preferred : "NEQUI")
+        _amount = State(initialValue: purchase.map { String(Int($0.total.rounded())) } ?? "")
+        _orderId = State(initialValue: purchase.map { "\($0.kind):\($0.id)" } ?? "")
     }
+
+    private var selectedOrder: MarketAPI.ProofOrderOption? { orders.first { $0.id == orderId } }
 
     var body: some View {
         let text = TrackText(language: language)
@@ -490,6 +502,17 @@ struct PaymentProofSheet: View {
                         Text("Llave Bre-B").tag("LLAVE_BREB")
                     }
                     .pickerStyle(.segmented)
+                    if !orders.isEmpty {
+                        Picker(language == .es ? "Compra" : "Purchase", selection: $orderId) {
+                            Text(language == .es ? "Sin compra" : "No purchase").tag("")
+                            ForEach(orders) { order in
+                                Text(orderTitle(order)).tag(order.id)
+                            }
+                        }
+                        .onChange(of: orderId) { _ in
+                            if let order = selectedOrder { amount = String(Int(order.total.rounded())) }
+                        }
+                    }
                     TextField(text.amount, text: $amount).keyboardType(.numberPad)
                     TextField(text.note, text: $note)
                 }
@@ -524,6 +547,12 @@ struct PaymentProofSheet: View {
         }
     }
 
+    private func orderTitle(_ order: MarketAPI.ProofOrderOption) -> String {
+        let total = Money.format(order.total, currency: nil)
+        if let number = order.orderNumber { return (language == .es ? "Pedido #" : "Order #") + "\(number) · \(total)" }
+        return (language == .es ? "Compra · " : "Purchase · ") + total
+    }
+
     private func submit(_ text: TrackText) async {
         guard let token = session.token else { return }
         guard let jpeg else {
@@ -537,8 +566,8 @@ struct PaymentProofSheet: View {
         defer { working = false }
         do {
             let response = try await MarketAPI.submitProof(
-                token: token, storeId: purchase.storeId, method: method,
-                orderKind: purchase.kind, orderRef: purchase.id,
+                token: token, storeId: storeId, method: method,
+                orderKind: selectedOrder?.kind ?? "", orderRef: selectedOrder?.ref ?? "",
                 amount: Double(amount.filter(\.isNumber)), note: note.trimmingCharacters(in: .whitespaces), jpeg: jpeg
             )
             if response.success == true {

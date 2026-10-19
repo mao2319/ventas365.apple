@@ -21,6 +21,7 @@ private struct StoreInfoText {
     var seeMapHow: String { pick("Ver mapa y cómo llegar", "See map and directions") }
     var social: String { pick("Redes y canales", "Social and channels") }
     var payments: String { pick("Medios de pago", "Payment methods") }
+    var sendProof: String { pick("Enviar comprobante de pago", "Send payment proof") }
     var copy: String { pick("Copiar", "Copy") }
     var copied: String { pick("Copiado", "Copied") }
     var directions: String { pick("Cómo llegar", "Directions") }
@@ -92,6 +93,9 @@ struct StoreInfoPanel: View {
     @State private var showQr = false
     @State private var showHours = false
     @State private var copiedMethod: String?
+    @State private var proofMethod: String?
+    @State private var showLogin = false
+    @EnvironmentObject private var session: MarketSession
 
     var body: some View {
         let text = StoreInfoText(language: language)
@@ -108,6 +112,12 @@ struct StoreInfoPanel: View {
         .sheet(isPresented: $showMap) { StoreMapSheet(store: store, language: language) }
         .sheet(isPresented: $showQr) { StoreQrSheet(store: store, language: language) }
         .sheet(isPresented: $showRatings) { StoreRatingsSheet(store: store, language: language, model: model) }
+        .sheet(isPresented: Binding(get: { proofMethod != nil }, set: { if !$0 { proofMethod = nil } })) {
+            PaymentProofSheet(storeId: store.storeId, initialMethod: proofMethod, language: language)
+        }
+        .sheet(isPresented: $showLogin) {
+            NavigationStack { LoginScreen(language: language, presentedAsSheet: true) }
+        }
     }
 
     // MARK: Acciones
@@ -337,6 +347,18 @@ struct StoreInfoPanel: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
+            }
+            if kind.isQr && info != nil {
+                Button {
+                    if session.isSignedIn { proofMethod = kind.rawValue } else { showLogin = true }
+                } label: {
+                    Label(text.sendProof, systemImage: "paperplane")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(.brandGreen)
+                .controlSize(.small)
+                .padding(.leading, 40)
             }
             if let qr = info?.qrImageUrl, !qr.isEmpty {
                 RemoteImage(url: qr)
