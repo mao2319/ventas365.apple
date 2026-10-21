@@ -79,6 +79,25 @@ struct PlacedItem: Decodable, Hashable {
     let imageUrl: String?
 }
 
+struct PlacedCustomer: Decodable, Hashable {
+    let fullName: String?
+    let documentNumber: String?
+    let phone: String?
+    let email: String?
+}
+
+struct PlacedDelivery: Decodable, Hashable {
+    let city: String?
+    let address: String?
+    let addressComplement: String?
+}
+
+struct PlacedReceiver: Decodable, Hashable {
+    let name: String?
+    let documentNumber: String?
+    let phone: String?
+}
+
 struct PlacedOrder: Decodable, Hashable {
     let id: String
     let orderNumber: Int?
@@ -87,6 +106,10 @@ struct PlacedOrder: Decodable, Hashable {
     let requestedPaymentMethod: String
     let total: Double
     let items: [PlacedItem]
+    /// Datos del cliente y de la entrega (los devuelve `market-place-order`).
+    var customer: PlacedCustomer? = nil
+    var delivery: PlacedDelivery? = nil
+    var receiver: PlacedReceiver? = nil
 
     /// "#0007".
     var numberLabel: String {
@@ -143,6 +166,23 @@ struct PurchaseDelivery: Decodable, Hashable {
     let rating: DeliveryRating?
 }
 
+/// Cancelación que pidió el cliente (ver `market-order-cancellations`).
+/// `solicitada`: la tienda la está revisando · `cancelado` · `rechazada`.
+struct PurchaseCancellation: Decodable, Hashable {
+    let id: String
+    let status: String
+    let reason: String
+    let stage: String?
+    let requestedAt: String?
+    let resolvedAt: String?
+    let storeNote: String?
+    let seen: Bool?
+
+    var isPending: Bool { status == "solicitada" }
+    var isCancelled: Bool { status == "cancelado" }
+    var isRejected: Bool { status == "rechazada" }
+}
+
 /// Pedido o compra del cliente (respuesta de `market-customer-purchases`).
 struct CustomerPurchase: Decodable, Identifiable, Hashable {
     let kind: String
@@ -162,6 +202,7 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
     let courier: PurchaseCourier?
     let storeLocation: GeoPoint?
     let delivery: PurchaseDelivery?
+    var cancellation: PurchaseCancellation? = nil
 
     var numberLabel: String {
         guard let orderNumber else { return "" }
@@ -170,14 +211,16 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
 
     /// Pedido aún pendiente de entrega o de que la tienda lo facture.
     var isActive: Bool {
+        if kind == "cancelado" { return false }
         if kind == "pedido" { return true }
         guard let status = delivery?.status else { return false }
         return status != "entregado" && status != "cancelado"
     }
 
-    enum Stage { case sent, accepted, preparing, ready, onTheWay, delivered, completed }
+    enum Stage { case sent, accepted, preparing, ready, onTheWay, delivered, completed, cancelled }
 
     var stage: Stage {
+        if kind == "cancelado" || cancellation?.isCancelled == true { return .cancelled }
         if kind == "venta" {
             return delivery?.status == "entregado" ? .delivered : .completed
         }
@@ -187,6 +230,26 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
         if acceptedAt != nil { return .accepted }
         return .sent
     }
+}
+
+extension CustomerPurchase {
+    /// Se puede cancelar mientras siga en curso y no haya una solicitud abierta.
+    var canCancel: Bool {
+        guard isActive, cancellation?.isPending != true else { return false }
+        if kind == "pedido" { return true }
+        guard kind == "venta", let status = delivery?.status else { return false }
+        return ["pendiente", "en_preparacion", "listo", "en_camino", "novedad"].contains(status)
+    }
+
+    /// Recién enviado: la tienda aún no lo acepta, así que se cancela de una vez.
+    /// Después, el cliente solo puede pedirle a la tienda que lo cancele.
+    var cancelsImmediately: Bool { kind == "pedido" && stage == .sent }
+}
+
+struct CancelOrderResponse: Decodable {
+    let success: Bool?
+    let error: String?
+    let immediate: Bool?
 }
 
 struct PurchasesResponse: Decodable {

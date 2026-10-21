@@ -294,12 +294,46 @@ enum MarketAPI {
     }
 
     private struct TokenBody: Encodable { let token: String }
+    private struct PurchasesBody: Encodable {
+        let token: String
+        let includeCancelled = true
+    }
 
-    /// Pedidos y compras del cliente en todas las tiendas.
+    /// Pedidos y compras del cliente en todas las tiendas (también los cancelados).
     static func purchases(token: String) async throws -> [CustomerPurchase] {
-        let response: PurchasesResponse = try await invoke("market-customer-purchases", TokenBody(token: token))
+        let response: PurchasesResponse = try await invoke("market-customer-purchases", PurchasesBody(token: token))
         guard response.success == true else { throw APIError.badResponse }
         return response.purchases ?? []
+    }
+
+    // MARK: - Cancelar pedido
+
+    private struct CancelBody: Encodable {
+        let action = "cancel"
+        let token: String
+        let kind: String
+        let id: String
+        let reason: String
+    }
+
+    private struct SeenBody: Encodable {
+        let action = "seen"
+        let token: String
+        let ids: [String]
+    }
+
+    private struct OkResponse: Decodable { let success: Bool? }
+
+    /// Cancela el pedido (si la tienda aún no lo acepta) o le envía la
+    /// solicitud de cancelación a la tienda (función `market-order-cancellations`).
+    static func cancelOrder(token: String, kind: String, id: String, reason: String) async throws -> CancelOrderResponse {
+        try await invoke("market-order-cancellations", CancelBody(token: token, kind: kind, id: id, reason: reason))
+    }
+
+    /// Marca como leídos los avisos de cancelación (aprobada o rechazada).
+    static func markCancellationsSeen(token: String, ids: [String]) async {
+        guard !ids.isEmpty else { return }
+        let _: OkResponse? = try? await invoke("market-order-cancellations", SeenBody(token: token, ids: ids))
     }
 
     // MARK: - Favoritos

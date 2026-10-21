@@ -81,6 +81,8 @@ struct PurchaseDetail: View {
     @State private var ratingComment = ""
     @State private var ratingBusy = false
     @State private var ratingDone = false
+    @State private var showCancel = false
+    @State private var cancelNotice: String?
 
     init(purchase: CustomerPurchase, language: AppLanguage) {
         self.language = language
@@ -91,7 +93,20 @@ struct PurchaseDetail: View {
         let text = OrderText(language: language)
         let track = TrackText(language: language)
         List {
-            Section(track.status) { timeline(text) }
+            if purchase.stage == .cancelled {
+                Section(track.status) {
+                    if let cancellation = purchase.cancellation {
+                        CancellationStatusView(cancellation: cancellation, language: language)
+                    } else {
+                        Label(text.stage(.cancelled), systemImage: "xmark.circle.fill").foregroundColor(.red)
+                    }
+                }
+            } else {
+                Section(track.status) { timeline(text) }
+                if let cancellation = purchase.cancellation {
+                    Section { CancellationStatusView(cancellation: cancellation, language: language) }
+                }
+            }
             if let location = mapCenter {
                 Section(track.map) {
                     TrackingMap(purchase: purchase, center: location, storeName: purchase.storeName.capitalized, courierLabel: track.yourLocation)
@@ -116,6 +131,7 @@ struct PurchaseDetail: View {
             }
             actions(track)
             rating(track)
+            cancelSection()
             Section(text.products) {
                 ForEach(purchase.items, id: \.self) { item in
                     HStack {
@@ -143,6 +159,13 @@ struct PurchaseDetail: View {
             if let id = purchase.delivery?.id { DeliveryChatSheet(deliveryId: id, language: language) }
         }
         .sheet(isPresented: $showProof) { PaymentProofSheet(storeId: purchase.storeId, purchase: purchase, language: language) }
+        .sheet(isPresented: $showCancel) {
+            CancelOrderSheet(purchase: purchase, language: language) { immediate in
+                let cancelText = CancelText(language: language)
+                cancelNotice = immediate ? cancelText.cancelledDone : cancelText.requestSent
+                Task { await refresh() }
+            }
+        }
     }
 
     // MARK: Piezas
@@ -235,6 +258,23 @@ struct PurchaseDetail: View {
         }
     }
 
+    @ViewBuilder
+    private func cancelSection() -> some View {
+        let text = CancelText(language: language)
+        if let cancelNotice {
+            Section { Label(cancelNotice, systemImage: "checkmark.circle").foregroundColor(.brandGreen) }
+        }
+        if purchase.canCancel {
+            Section {
+                Button(role: .destructive) { showCancel = true } label: {
+                    Label(purchase.cancelsImmediately ? text.cancelNow : text.requestCancel, systemImage: "xmark.circle")
+                }
+            } footer: {
+                Text(purchase.cancelsImmediately ? text.cancelNowHint : text.requestHint)
+            }
+        }
+    }
+
     // MARK: Datos
 
     private func refresh() async {
@@ -242,6 +282,7 @@ struct PurchaseDetail: View {
               let fresh = list.first(where: { $0.id == purchase.id && $0.kind == purchase.kind })
                 ?? list.first(where: { $0.id == purchase.id }) else { return }
         purchase = fresh
+        if let token = session.token { CancellationNotifier.check(list, token: token, language: language) }
     }
 
     private func autoRefresh() async {

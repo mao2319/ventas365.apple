@@ -134,7 +134,9 @@ struct MarketScreen: View {
         .tint(.brandOrange)
         .task { await model.load() }
         // Pedidos en curso: al entrar, al cambiar de cuenta y al volver a Inicio.
-        .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") { await orders.load(token: session.token) }
+        .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") {
+            if nav.tab == .home { await orders.keepFresh(token: session.token) } else { await orders.load(token: session.token) }
+        }
         .sheet(item: $detail) { item in
             ProductDetailSheet(product: item.product, store: item.store, language: language)
         }

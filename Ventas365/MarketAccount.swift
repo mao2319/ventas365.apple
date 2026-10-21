@@ -545,9 +545,9 @@ struct ActiveOrdersRail: View {
                                     Text("\(purchase.storeName.capitalized) \(purchase.numberLabel)")
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.ink)
-                                    Text(text.stage(purchase.stage))
+                                    Text(text.status(purchase))
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.brandGreen)
+                                        .foregroundColor(text.statusColor(purchase))
                                 }
                                 Spacer()
                                 Text(Money.format(purchase.total, currency: nil))

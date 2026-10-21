@@ -249,13 +249,18 @@ extension CourierShift: UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Con la app abierta la página ya avisa (sonido y vibración).
+    /// Con la app abierta la página ya avisa (sonido y vibración). Los avisos
+    /// de cancelación del Market sí se muestran: no hay otro aviso en pantalla.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([])
+        if notification.request.identifier.hasPrefix("cancel-") {
+            completionHandler([.banner, .list, .sound])
+        } else {
+            completionHandler([])
+        }
     }
 }
 

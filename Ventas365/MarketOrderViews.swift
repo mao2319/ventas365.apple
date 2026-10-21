@@ -55,6 +55,13 @@ struct OrderText {
     var products: String { pick("Productos", "Products") }
     var payWith: String { pick("Pago", "Payment") }
     var receiver: String { pick("Recibe", "Receiver") }
+    var documentShort: String { pick("Doc.", "ID") }
+
+    func differentCity(store: String, city: String) -> String {
+        language == .es
+            ? "\(store) solo recibe pedidos en \(city). Elige una tienda de tu ciudad."
+            : "\(store) only takes orders in \(city). Choose a store in your city."
+    }
     var myOrders: String { pick("Mis pedidos", "My orders") }
     var inProgress: String { pick("En curso", "In progress") }
     var previous: String { pick("Anteriores", "Previous") }
@@ -84,7 +91,20 @@ struct OrderText {
         case .onTheWay: return pick("En camino", "On the way")
         case .delivered: return pick("Entregado", "Delivered")
         case .completed: return pick("Completado", "Completed")
+        case .cancelled: return pick("Cancelado", "Canceled")
         }
+    }
+
+    /// Estado a mostrar en listas: la cancelación pendiente manda sobre la etapa.
+    func status(_ purchase: CustomerPurchase) -> String {
+        if purchase.cancellation?.isPending == true { return pick("Cancelación solicitada", "Cancellation requested") }
+        return stage(purchase.stage)
+    }
+
+    func statusColor(_ purchase: CustomerPurchase) -> Color {
+        if purchase.stage == .cancelled { return .red }
+        if purchase.cancellation?.isPending == true { return .orange }
+        return .brandGreen
     }
 
     /// Mensajes del servidor traducidos por código; el resto llega ya en español.
@@ -97,6 +117,7 @@ struct OrderText {
         case "out_of_stock": return "There isn't enough stock for one of your products."
         case "product_unavailable": return "A product in your order is no longer available."
         case "profile_incomplete": return "Complete your name, ID and mobile in your account to order."
+        case "different_city": return "This store only takes orders in its own city. Choose a store in your city."
         default: return genericError
         }
     }
@@ -288,6 +309,9 @@ struct OrderScreen: View {
             }
 
             Section {
+                if let cityMismatch = cityMismatch(store, text) {
+                    Label(cityMismatch, systemImage: "mappin.slash").font(.system(size: 14)).foregroundColor(.red)
+                }
                 if let errorMessage {
                     Text(errorMessage).font(.system(size: 14)).foregroundColor(.red)
                 }
@@ -299,7 +323,7 @@ struct OrderScreen: View {
                         .frame(maxWidth: .infinity, minHeight: 28)
                 }
                 .modifier(PrimaryActionStyle())
-                .disabled(!canConfirm || submitting || closed || belowMinimum)
+                .disabled(!canConfirm || submitting || closed || belowMinimum || cityMismatch(store, text) != nil)
             }
         }
     }
@@ -410,6 +434,14 @@ struct OrderScreen: View {
         }
     }
 
+    /// La tienda y el cliente deben estar en la misma ciudad (a domicilio, la
+    /// de entrega; para recoger, la de su cuenta). El servidor lo vuelve a validar.
+    private func cityMismatch(_ store: MarketStore, _ text: OrderText) -> String? {
+        let customerCity = orderType == .delivery ? resolvedAddress.city : (session.customer?.city ?? "")
+        guard !CityName.same(store.city, customerCity), let storeCity = store.city else { return nil }
+        return text.differentCity(store: store.displayName, city: storeCity)
+    }
+
     private var canConfirm: Bool {
         guard let customer = session.customer, method != nil else { return false }
         guard !(customer.documentNumber ?? "").isEmpty, !(customer.phone ?? "").isEmpty, !customer.fullName.isEmpty else { return false }
@@ -480,6 +512,7 @@ struct OrderConfirmation: View {
     let onDone: () -> Void
 
     @EnvironmentObject private var nav: MarketNav
+    @EnvironmentObject private var session: MarketSession
 
     var body: some View {
         let text = OrderText(language: language)
@@ -520,25 +553,104 @@ struct OrderConfirmation: View {
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
-                ShareLink(item: summary(text)) {
-                    Label(text.share, systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 28)
-                }
-                .buttonStyle(.bordered)
-                if order.orderType == "llevar", let url = whatsappURL(text) {
-                    Link(destination: url) {
-                        Label(text.writeStore, systemImage: "message").frame(maxWidth: .infinity, minHeight: 28)
+                detailsCard(text)
+                // Todos del mismo ancho, uno debajo del otro.
+                VStack(spacing: 10) {
+                    ShareLink(item: summary(text)) {
+                        Label(text.share, systemImage: "square.and.arrow.up").confirmationButtonLabel()
                     }
-                    .buttonStyle(.bordered)
-                }
-                Button(text.viewOrders) {
-                    onDone()
-                    nav.tab = .account
-                }
-                .buttonStyle(.bordered)
-                Button(text.done, action: onDone)
+                    .modifier(SecondaryActionStyle())
+                    if order.orderType == "llevar", let url = whatsappURL(text) {
+                        Link(destination: url) {
+                            Label(text.writeStore, systemImage: "message").confirmationButtonLabel()
+                        }
+                        .modifier(SecondaryActionStyle())
+                    }
+                    Button {
+                        onDone()
+                        nav.tab = .account
+                    } label: {
+                        Label(text.viewOrders, systemImage: "list.bullet.rectangle").confirmationButtonLabel()
+                    }
+                    .modifier(SecondaryActionStyle())
+                    Button(action: onDone) {
+                        Text(text.done).font(.system(size: 17, weight: .semibold)).confirmationButtonLabel()
+                    }
                     .modifier(PrimaryActionStyle())
+                }
+                .controlSize(.large)
+                .padding(.top, 4)
             }
             .padding(16)
+        }
+    }
+
+    // MARK: Cliente y entrega
+
+    private var customerName: String { order.customer?.fullName ?? session.customer?.fullName ?? "" }
+    private var customerDocument: String { order.customer?.documentNumber ?? session.customer?.documentNumber ?? "" }
+    private var customerPhone: String { order.customer?.phone ?? session.customer?.phone ?? "" }
+    private var customerEmail: String { order.customer?.email ?? session.customer?.email ?? "" }
+
+    /// "Cra 7 # 45-10, Apto 302 · Bogotá" (domicilio) o la dirección de la tienda (recoger).
+    private var placeLine: String {
+        let isDelivery = order.orderType == "domicilio"
+        let address = order.delivery?.address ?? (isDelivery ? "" : store.address ?? "")
+        let city = order.delivery?.city ?? (isDelivery ? "" : store.city ?? "")
+        let complement = order.delivery?.addressComplement ?? ""
+        let street = [address, complement].filter { !$0.isEmpty }.joined(separator: ", ")
+        return [street, city].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func detailsCard(_ text: OrderText) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            infoBlock(
+                title: order.orderType == "domicilio" ? text.deliveryData : text.pickupData,
+                icon: order.orderType == "domicilio" ? "mappin.and.ellipse" : "bag",
+                lines: order.orderType == "domicilio" ? [placeLine] : [store.displayName, placeLine]
+            )
+            Divider()
+            infoBlock(
+                title: text.customerData,
+                icon: "person.crop.circle",
+                lines: [
+                    customerName,
+                    customerDocument.isEmpty ? "" : "\(text.documentShort) \(customerDocument)",
+                    customerPhone.isEmpty ? "" : "\(text.phone): \(customerPhone)",
+                    customerEmail,
+                ]
+            )
+            if let receiver = order.receiver, let name = receiver.name, !name.isEmpty {
+                Divider()
+                infoBlock(
+                    title: text.receiver,
+                    icon: "person.2",
+                    lines: [
+                        name,
+                        (receiver.documentNumber ?? "").isEmpty ? "" : "\(text.documentShort) \(receiver.documentNumber!)",
+                        (receiver.phone ?? "").isEmpty ? "" : "\(text.phone): \(receiver.phone!)",
+                    ]
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
+    }
+
+    private func infoBlock(title: String, icon: String, lines: [String]) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(.brandGreen)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.inkMuted)
+                ForEach(lines.filter { !$0.isEmpty }, id: \.self) { line in
+                    Text(line).font(.system(size: 15)).foregroundColor(.ink)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -552,6 +664,7 @@ struct OrderConfirmation: View {
 
     private func summary(_ text: OrderText) -> String {
         var lines = ["\(store.displayName) \(order.numberLabel)", text.type(order.orderType)]
+        if order.orderType == "domicilio", !placeLine.isEmpty { lines.append(placeLine) }
         lines += order.items.map { "\($0.quantity) × \($0.description)" }
         lines.append("\(text.total): \(Money.format(order.total, currency: store.currencyCode))")
         return lines.joined(separator: "\n")
@@ -587,9 +700,25 @@ final class MyOrdersModel: ObservableObject {
             return
         }
         do {
-            state = .loaded(try await MarketAPI.purchases(token: token))
+            let list = try await MarketAPI.purchases(token: token)
+            state = .loaded(list)
+            CancellationNotifier.check(list, token: token, language: AppLanguage.stored())
         } catch {
+            if case .loaded = state { return } // Un fallo al recargar no borra lo que ya se ve.
             state = .failed
+        }
+    }
+
+    /// Recarga cada 30 s mientras la vista que la llama siga en pantalla:
+    /// así "Órdenes en progreso" cambia de estado y llegan los avisos de
+    /// cancelación sin que el cliente tenga que actualizar.
+    func keepFresh(token: String?) async {
+        await load(token: token)
+        guard token != nil else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            if Task.isCancelled { break }
+            await load(token: token)
         }
     }
 }
@@ -666,12 +795,49 @@ struct PurchaseRow: View {
                 .clipShape(Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(purchase.storeName.capitalized) \(purchase.numberLabel)").font(.system(size: 16, weight: .semibold))
-                Text(text.stage(purchase.stage)).font(.system(size: 14)).foregroundColor(.brandGreen)
+                Text(text.status(purchase)).font(.system(size: 14)).foregroundColor(text.statusColor(purchase))
                 Text(OrderDate.short(purchase.date, language: language)).font(.system(size: 13)).foregroundColor(.inkMuted)
             }
             Spacer()
             Text(Money.format(purchase.total, currency: nil)).font(.system(size: 15, weight: .semibold))
         }
         .padding(.vertical, 4)
+    }
+}
+
+
+/// Botón secundario de la confirmación: cristal en iOS 26, borde antes.
+struct SecondaryActionStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glass).tint(.brandGreen)
+        } else {
+            content.buttonStyle(.bordered).tint(.brandGreen)
+        }
+    }
+}
+
+private extension View {
+    /// Mismo ancho y alto en todos los botones de la confirmación.
+    func confirmationButtonLabel() -> some View {
+        frame(maxWidth: .infinity, minHeight: 30)
+    }
+}
+
+
+/// Compara ciudades sin tildes, mayúsculas ni "D.C." ("Bogotá D.C." = "bogota").
+enum CityName {
+    static func normalized(_ value: String?) -> String {
+        var text = (value ?? "").folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CO")).lowercased()
+        text = text.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: ",", with: " ")
+        text = text.replacingOccurrences(of: #"\bd\s*c\b"#, with: " ", options: .regularExpression)
+        return text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    /// Si falta alguna de las dos no se puede comparar: no bloquea.
+    static func same(_ a: String?, _ b: String?) -> Bool {
+        let left = normalized(a)
+        let right = normalized(b)
+        return left.isEmpty || right.isEmpty || left == right
     }
 }
