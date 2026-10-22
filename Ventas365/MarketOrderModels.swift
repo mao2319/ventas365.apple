@@ -147,6 +147,14 @@ struct GeoPoint: Decodable, Hashable {
     let at: String?
 }
 
+/// Dirección de entrega (para la ruta del mapa en vivo).
+struct DeliveryDestination: Decodable, Hashable {
+    let address: String
+    let city: String?
+
+    var query: String { [address, city ?? ""].filter { !$0.isEmpty }.joined(separator: ", ") }
+}
+
 struct DeliveryRating: Decodable, Hashable {
     let stars: Int
     let comment: String?
@@ -164,6 +172,7 @@ struct PurchaseDelivery: Decodable, Hashable {
     let courierLocation: GeoPoint?
     let proofNote: String?
     let rating: DeliveryRating?
+    var destination: DeliveryDestination? = nil
 }
 
 /// Cancelación que pidió el cliente (ver `market-order-cancellations`).
@@ -203,6 +212,13 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
     let storeLocation: GeoPoint?
     let delivery: PurchaseDelivery?
     var cancellation: PurchaseCancellation? = nil
+    /// Pedido aún sin facturar con domiciliario del Market: su última posición.
+    var courierLocation: GeoPoint? = nil
+    var destination: DeliveryDestination? = nil
+
+    /// Posición del domiciliario y a dónde va, venga de la entrega o del pedido.
+    var liveCourier: GeoPoint? { delivery?.courierLocation ?? courierLocation }
+    var liveDestination: DeliveryDestination? { delivery?.destination ?? destination }
 
     var numberLabel: String {
         guard let orderNumber else { return "" }

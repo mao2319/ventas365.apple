@@ -36,6 +36,7 @@ private struct TrackText {
     var needPhoto: String { pick("Adjunta la foto del comprobante.", "Attach the proof photo.") }
     var error: String { pick("No se pudo completar. Intenta de nuevo.", "Couldn't complete. Try again.") }
     var yourLocation: String { pick("Domiciliario", "Courier") }
+    var destination: String { pick("Tu dirección", "Your address") }
 }
 
 // MARK: - Línea de estados
@@ -109,7 +110,7 @@ struct PurchaseDetail: View {
             }
             if let location = mapCenter {
                 Section(track.map) {
-                    TrackingMap(purchase: purchase, center: location, storeName: purchase.storeName.capitalized, courierLabel: track.yourLocation)
+                    TrackingMap(purchase: purchase, center: location, storeName: purchase.storeName.capitalized, courierLabel: track.yourLocation, destinationLabel: track.destination)
                         .frame(height: 220)
                         .listRowInsets(EdgeInsets())
                 }
@@ -177,7 +178,7 @@ struct PurchaseDetail: View {
 
     private var mapCenter: CLLocationCoordinate2D? {
         guard purchase.isActive, purchase.isDelivery || purchase.orderType == "llevar" else { return nil }
-        if let courier = purchase.delivery?.courierLocation { return CLLocationCoordinate2D(latitude: courier.lat, longitude: courier.lng) }
+        if let courier = purchase.liveCourier { return CLLocationCoordinate2D(latitude: courier.lat, longitude: courier.lng) }
         if let store = purchase.storeLocation { return CLLocationCoordinate2D(latitude: store.lat, longitude: store.lng) }
         return nil
     }
@@ -312,57 +313,184 @@ struct PurchaseDetail: View {
 
 // MARK: - Mapa
 
-private struct TrackPin: Identifiable {
-    let id: String
-    let coordinate: CLLocationCoordinate2D
-    let title: String
-    let symbol: String
-    let tint: Color
-}
-
-private struct TrackingMap: View {
+/// Mapa del seguimiento: tienda, domiciliario y destino, con la ruta
+/// recomendada (Apple Maps) del domiciliario —o de la tienda, mientras no
+/// sale— hasta la dirección de entrega.
+///
+/// Rendimiento: el domiciliario reporta su posición cada ~20 s y el detalle
+/// la consulta cada 10 s. La dirección se ubica una sola vez (queda en
+/// caché) y la ruta solo se vuelve a pedir si el domiciliario se movió más de
+/// 150 m o pasó un minuto desde la anterior.
+private struct TrackingMap: UIViewRepresentable {
     let purchase: CustomerPurchase
     let center: CLLocationCoordinate2D
     let storeName: String
     let courierLabel: String
+    let destinationLabel: String
 
-    @State private var region: MKCoordinateRegion
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
-    init(purchase: CustomerPurchase, center: CLLocationCoordinate2D, storeName: String, courierLabel: String) {
-        self.purchase = purchase
-        self.center = center
-        self.storeName = storeName
-        self.courierLabel = courierLabel
-        _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.delegate = context.coordinator
+        map.showsCompass = false
+        map.pointOfInterestFilter = .excludingAll
+        map.setRegion(MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)), animated: false)
+        return map
     }
 
-    private var pins: [TrackPin] {
-        var result: [TrackPin] = []
-        if let store = purchase.storeLocation {
-            result.append(TrackPin(id: "store", coordinate: CLLocationCoordinate2D(latitude: store.lat, longitude: store.lng), title: storeName, symbol: "storefront.fill", tint: .brandOrange))
-        }
-        if let courier = purchase.delivery?.courierLocation {
-            result.append(TrackPin(id: "courier", coordinate: CLLocationCoordinate2D(latitude: courier.lat, longitude: courier.lng), title: courierLabel, symbol: "bicycle", tint: .brandGreen))
-        }
-        return result
+    func updateUIView(_ map: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.map = map
+        coordinator.update(
+            store: purchase.storeLocation.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) },
+            courier: purchase.liveCourier.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) },
+            destination: purchase.liveDestination,
+            showRoute: purchase.isDelivery && purchase.isActive,
+            labels: (storeName, courierLabel, destinationLabel)
+        )
     }
 
-    var body: some View {
-        Map(coordinateRegion: $region, annotationItems: pins) { pin in
-            MapAnnotation(coordinate: pin.coordinate) {
-                VStack(spacing: 2) {
-                    Image(systemName: pin.symbol)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(pin.tint))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                    Text(pin.title).font(.system(size: 11, weight: .semibold)).padding(.horizontal, 5).background(Capsule().fill(Color.white.opacity(0.9)))
+    final class Pin: NSObject, MKAnnotation {
+        let kind: String
+        @objc dynamic var coordinate: CLLocationCoordinate2D
+        let title: String?
+        init(kind: String, coordinate: CLLocationCoordinate2D, title: String) {
+            self.kind = kind
+            self.coordinate = coordinate
+            self.title = title
+        }
+    }
+
+    final class Coordinator: NSObject, MKMapViewDelegate {
+        weak var map: MKMapView?
+        private var pins: [String: Pin] = [:]
+        private var route: MKPolyline?
+        private var routeFrom: CLLocation?
+        private var routeAt: Date?
+        private var routing = false
+        private var fitted = false
+        private var destinationCoordinate: CLLocationCoordinate2D?
+        private var geocodedQuery: String?
+        private static var geocodeCache: [String: CLLocationCoordinate2D] = [:]
+
+        func update(store: CLLocationCoordinate2D?, courier: CLLocationCoordinate2D?, destination: DeliveryDestination?,
+                    showRoute: Bool, labels: (String, String, String)) {
+            place("store", store, labels.0)
+            place("courier", courier, labels.1)
+            if let destination, showRoute {
+                resolve(destination) { [weak self] coordinate in
+                    guard let self else { return }
+                    self.place("destination", coordinate, labels.2)
+                    self.updateRoute(from: courier ?? store, to: coordinate)
+                    self.fit()
                 }
+            } else {
+                place("destination", nil, labels.2)
+                fit()
             }
         }
-        .onChange(of: "\(center.latitude),\(center.longitude)") { _ in
-            withAnimation { region.center = center }
+
+        private func place(_ kind: String, _ coordinate: CLLocationCoordinate2D?, _ title: String) {
+            guard let map else { return }
+            if let coordinate {
+                if let pin = pins[kind] {
+                    UIView.animate(withDuration: 0.6) { pin.coordinate = coordinate }
+                } else {
+                    let pin = Pin(kind: kind, coordinate: coordinate, title: title)
+                    pins[kind] = pin
+                    map.addAnnotation(pin)
+                }
+            } else if let pin = pins.removeValue(forKey: kind) {
+                map.removeAnnotation(pin)
+            }
+        }
+
+        /// La dirección se ubica una vez por pedido (y queda en caché entre pantallas).
+        private func resolve(_ destination: DeliveryDestination, done: @escaping (CLLocationCoordinate2D) -> Void) {
+            let query = destination.query
+            if let cached = Self.geocodeCache[query] {
+                destinationCoordinate = cached
+                done(cached)
+                return
+            }
+            guard geocodedQuery != query else {
+                if let destinationCoordinate { done(destinationCoordinate) }
+                return
+            }
+            geocodedQuery = query
+            CLGeocoder().geocodeAddressString(query) { [weak self] placemarks, _ in
+                guard let coordinate = placemarks?.first?.location?.coordinate else { return }
+                Self.geocodeCache[query] = coordinate
+                self?.destinationCoordinate = coordinate
+                DispatchQueue.main.async { done(coordinate) }
+            }
+        }
+
+        private func updateRoute(from origin: CLLocationCoordinate2D?, to destination: CLLocationCoordinate2D) {
+            guard let origin, !routing else { return }
+            let here = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+            if let routeFrom, let routeAt, here.distance(from: routeFrom) < 150, Date().timeIntervalSince(routeAt) < 60 { return }
+            routing = true
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+            request.transportType = .automobile
+            MKDirections(request: request).calculate { [weak self] response, _ in
+                guard let self else { return }
+                self.routing = false
+                guard let polyline = response?.routes.first?.polyline, let map = self.map else { return }
+                if let old = self.route { map.removeOverlay(old) }
+                self.route = polyline
+                self.routeFrom = here
+                self.routeAt = Date()
+                map.addOverlay(polyline, level: .aboveRoads)
+                self.fitted = false
+                self.fit()
+            }
+        }
+
+        /// Encuadra tienda, domiciliario, destino y ruta (una vez, y al cambiar la ruta).
+        private func fit() {
+            guard let map, !fitted, !pins.isEmpty else { return }
+            var rect = MKMapRect.null
+            for pin in pins.values {
+                let point = MKMapPoint(pin.coordinate)
+                rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 1, height: 1))
+            }
+            if let route { rect = rect.union(route.boundingMapRect) }
+            guard pins.count > 1 || route != nil else { return }
+            map.setVisibleMapRect(rect, edgePadding: UIEdgeInsets(top: 44, left: 36, bottom: 36, right: 36), animated: true)
+            fitted = true
+        }
+
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let polyline = overlay as? MKPolyline else { return MKOverlayRenderer(overlay: overlay) }
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = UIColor(red: 0x1A / 255, green: 0x7F / 255, blue: 0x4B / 255, alpha: 0.9)
+            renderer.lineWidth = 5
+            renderer.lineCap = .round
+            return renderer
+        }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let pin = annotation as? Pin else { return nil }
+            let view = MKMarkerAnnotationView(annotation: pin, reuseIdentifier: pin.kind)
+            view.titleVisibility = .visible
+            view.displayPriority = .required
+            switch pin.kind {
+            case "store":
+                view.markerTintColor = UIColor(red: 1, green: 0x6A / 255, blue: 0, alpha: 1)
+                view.glyphImage = UIImage(systemName: "storefront.fill")
+            case "courier":
+                view.markerTintColor = UIColor(red: 0x1A / 255, green: 0x7F / 255, blue: 0x4B / 255, alpha: 1)
+                view.glyphImage = UIImage(systemName: "bicycle")
+                view.zPriority = .max
+            default:
+                view.markerTintColor = UIColor(red: 0x1D / 255, green: 0x1D / 255, blue: 0x1F / 255, alpha: 1)
+                view.glyphImage = UIImage(systemName: "house.fill")
+            }
+            return view
         }
     }
 }
