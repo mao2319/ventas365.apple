@@ -172,9 +172,8 @@ struct WebScreen: View {
         let strings = web.language.strings
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                barButton("chevron.left", label: strings.back) { if !web.goBack() { onExit() } }
                 Menu {
-                    Button { onExit() } label: { Label(strings.appHome, systemImage: "house") }
+                    Button { onExit() } label: { Label(web.language == .es ? "Inicio" : "Home", systemImage: "house") }
                     ForEach([AppSection.market, .negocios, .domicilios].filter { $0 != section }, id: \.self) { other in
                         Button { onNavigate?(other) ?? onExit() } label: {
                             Label(other.title(strings), systemImage: other == .market ? "bag" : other == .negocios ? "briefcase" : "bicycle")
@@ -188,14 +187,12 @@ struct WebScreen: View {
                         .frame(width: 44, height: 44)
                         .modifier(GlassCircle())
                 }
-                .accessibilityLabel(strings.appHome)
+                .accessibilityLabel(web.language == .es ? "Menú" : "Menu")
                 Spacer()
                 Text(section.title(strings))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.ink)
                 Spacer()
-                // Mismo ancho que los dos botones de la izquierda, para centrar el título.
-                Color.clear.frame(width: 52, height: 44)
                 barButton("arrow.clockwise", label: strings.reload) { web.reload() }
             }
             .padding(.horizontal, 12)
