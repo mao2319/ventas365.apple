@@ -104,6 +104,11 @@ struct PurchaseDetail: View {
                     }
                 }
             } else {
+                if let code = purchase.delivery?.deliveryCode, !code.isEmpty, purchase.isActive {
+                    Section {
+                        DeliveryCodeCard(code: code, language: language)
+                    }
+                }
                 Section(track.status) { timeline(text) }
                 if let cancellation = purchase.cancellation {
                     Section { CancellationStatusView(cancellation: cancellation, language: language) }
@@ -503,6 +508,34 @@ private struct TrackingMap: UIViewRepresentable {
 }
 
 // MARK: - Chat con el domiciliario
+
+/// Código de entrega: el cliente se lo dicta al domiciliario al recibir el
+/// pedido; sin él, el domiciliario no puede cerrar la entrega.
+struct DeliveryCodeCard: View {
+    let code: String
+    let language: AppLanguage
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Label(language == .es ? "Código de entrega" : "Delivery code", systemImage: "key.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.inkMuted)
+            Text(code.map(String.init).joined(separator: " "))
+                .font(.system(size: 40, weight: .bold, design: .monospaced))
+                .foregroundColor(.ink)
+                .textSelection(.enabled)
+                .accessibilityLabel(code.map(String.init).joined(separator: " "))
+            Text(language == .es
+                 ? "Díctaselo al domiciliario cuando recibas tu pedido. No lo compartas antes."
+                 : "Tell it to the courier when you receive your order. Don't share it before.")
+                .font(.system(size: 13))
+                .foregroundColor(.inkMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+}
 
 /// Cuántos mensajes del domiciliario ya vio el cliente, por entrega (en el
 /// teléfono). Lo que el servidor cuenta de más son los mensajes sin leer.

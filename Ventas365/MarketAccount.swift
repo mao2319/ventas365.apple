@@ -549,6 +549,11 @@ struct ActiveOrdersRail: View {
                                     Text(text.status(purchase))
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(text.statusColor(purchase))
+                                    if let code = purchase.delivery?.deliveryCode, !code.isEmpty {
+                                        Label((language == .es ? "Código de entrega: " : "Delivery code: ") + code, systemImage: "key.fill")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(.ink)
+                                    }
                                     if purchase.awaitsRating {
                                         Label(language == .es ? "Califica al domiciliario" : "Rate your courier", systemImage: "star.fill")
                                             .font(.system(size: 13, weight: .semibold))

@@ -175,6 +175,8 @@ struct PurchaseDelivery: Decodable, Hashable {
     var destination: DeliveryDestination? = nil
     /// Mensajes que el domiciliario (o la tienda) escribió en el chat.
     var courierMessages: Int? = nil
+    /// Código que el cliente le dicta al domiciliario al recibir (solo en camino).
+    var deliveryCode: String? = nil
 }
 
 /// Cancelación que pidió el cliente (ver `market-order-cancellations`).
