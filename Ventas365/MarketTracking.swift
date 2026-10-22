@@ -77,6 +77,7 @@ struct PurchaseDetail: View {
     @EnvironmentObject private var session: MarketSession
     @State private var purchase: CustomerPurchase
     @State private var showChat = false
+    @ObservedObject private var chatSeen = ChatSeen.shared
     @State private var showProof = false
     @State private var stars = 0
     @State private var ratingComment = ""
@@ -221,7 +222,13 @@ struct PurchaseDetail: View {
                     Link(destination: url) { Label(track.call, systemImage: "phone.fill") }
                 }
                 if hasChat {
-                    Button { showChat = true } label: { Label(track.chat, systemImage: "bubble.left.and.bubble.right.fill") }
+                    Button { showChat = true } label: {
+                        HStack {
+                            Label(track.chat, systemImage: "bubble.left.and.bubble.right.fill")
+                            Spacer()
+                            UnreadBadge(count: chatSeen.unread(purchase))
+                        }
+                    }
                 }
                 if needsProof {
                     Button { showProof = true } label: { Label(track.sendProof, systemImage: "doc.badge.plus") }
@@ -497,6 +504,45 @@ private struct TrackingMap: UIViewRepresentable {
 
 // MARK: - Chat con el domiciliario
 
+/// Cuántos mensajes del domiciliario ya vio el cliente, por entrega (en el
+/// teléfono). Lo que el servidor cuenta de más son los mensajes sin leer.
+final class ChatSeen: ObservableObject {
+    static let shared = ChatSeen()
+    private let key = "market.chatSeen"
+    @Published private var seen: [String: Int]
+
+    private init() {
+        seen = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+    }
+
+    func unread(_ purchase: CustomerPurchase) -> Int {
+        guard let delivery = purchase.delivery, let id = delivery.id, purchase.isActive else { return 0 }
+        return max(0, (delivery.courierMessages ?? 0) - (seen[id] ?? 0))
+    }
+
+    func markSeen(deliveryId: String, count: Int) {
+        guard count > (seen[deliveryId] ?? 0) else { return }
+        seen[deliveryId] = count
+        UserDefaults.standard.set(seen, forKey: key)
+    }
+}
+
+/// Burbuja roja con el número de mensajes sin leer.
+struct UnreadBadge: View {
+    let count: Int
+    var body: some View {
+        if count > 0 {
+            Text(count > 9 ? "9+" : "\(count)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 20, minHeight: 20)
+                .background(Capsule().fill(Color.red))
+                .accessibilityLabel("\(count)")
+        }
+    }
+}
+
 struct DeliveryChatSheet: View {
     let deliveryId: String
     let language: AppLanguage
@@ -569,7 +615,7 @@ struct DeliveryChatSheet: View {
         let mine = message.sender == "cliente"
         return HStack {
             if mine { Spacer(minLength: 40) }
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
                 if !mine {
                     Text(message.senderName ?? (message.sender == "tienda" ? text.store : text.courier))
                         .font(.system(size: 11, weight: .semibold))
@@ -585,6 +631,9 @@ struct DeliveryChatSheet: View {
                 if let body = message.body, !body.isEmpty {
                     Text(body).font(.system(size: 15)).foregroundColor(mine ? .white : .ink)
                 }
+                Text(OrderDate.chatStamp(message.createdAt, language: language))
+                    .font(.system(size: 11))
+                    .foregroundColor(mine ? .white.opacity(0.75) : .inkMuted)
             }
             .padding(10)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(mine ? Color.brandGreen : Color.white))
@@ -596,6 +645,7 @@ struct DeliveryChatSheet: View {
         guard let token = session.token else { return }
         if let response = try? await MarketAPI.deliveryChat(token: token, deliveryId: deliveryId), response.success == true {
             messages = response.messages ?? []
+            ChatSeen.shared.markSeen(deliveryId: deliveryId, count: messages.filter { $0.sender != "cliente" }.count)
         }
     }
 

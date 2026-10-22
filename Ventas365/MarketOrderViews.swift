@@ -791,6 +791,7 @@ struct MyOrdersScreen: View {
 struct PurchaseRow: View {
     let purchase: CustomerPurchase
     let language: AppLanguage
+    @ObservedObject private var chatSeen = ChatSeen.shared
 
     var body: some View {
         let text = OrderText(language: language)
@@ -804,6 +805,7 @@ struct PurchaseRow: View {
                 Text(OrderDate.short(purchase.date, language: language)).font(.system(size: 13)).foregroundColor(.inkMuted)
             }
             Spacer()
+            UnreadBadge(count: chatSeen.unread(purchase))
             Text(Money.format(purchase.total, currency: nil)).font(.system(size: 15, weight: .semibold))
         }
         .padding(.vertical, 4)

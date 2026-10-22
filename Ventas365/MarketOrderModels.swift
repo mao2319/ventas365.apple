@@ -173,6 +173,8 @@ struct PurchaseDelivery: Decodable, Hashable {
     let proofNote: String?
     let rating: DeliveryRating?
     var destination: DeliveryDestination? = nil
+    /// Mensajes que el domiciliario (o la tienda) escribió en el chat.
+    var courierMessages: Int? = nil
 }
 
 /// Cancelación que pidió el cliente (ver `market-order-cancellations`).
@@ -290,6 +292,18 @@ enum OrderDate {
         formatter.locale = Locale(identifier: language == .es ? "es_CO" : "en_US")
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    /// Hora del mensaje del chat; con la fecha si ya pasó más de un día.
+    static func chatStamp(_ iso: String, language: AppLanguage) -> String {
+        guard let date = parser.date(from: iso) ?? plainParser.date(from: iso) else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language == .es ? "es_CO" : "en_US")
+        formatter.timeStyle = .short
+        if Date().timeIntervalSince(date) > 24 * 60 * 60 {
+            formatter.setLocalizedDateFormatFromTemplate("d MMM jj:mm")
+        }
         return formatter.string(from: date)
     }
 }

@@ -521,6 +521,7 @@ struct ActiveOrdersRail: View {
     /// Lo carga la pantalla de inicio: un `.task` sobre una vista vacía (sin
     /// pedidos) no se ejecutaría nunca y la sección jamás aparecería.
     @ObservedObject var model: MyOrdersModel
+    @ObservedObject private var chatSeen = ChatSeen.shared
 
     private var active: [CustomerPurchase] {
         if case .loaded(let list) = model.state { return list.filter(\.isActive) }
@@ -550,6 +551,7 @@ struct ActiveOrdersRail: View {
                                         .foregroundColor(text.statusColor(purchase))
                                 }
                                 Spacer()
+                                UnreadBadge(count: chatSeen.unread(purchase))
                                 Text(Money.format(purchase.total, currency: nil))
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.ink)
