@@ -193,7 +193,8 @@ struct WebScreen: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.ink)
                 Spacer()
-                barButton("arrow.clockwise", label: strings.reload) { web.reload() }
+                // Mismo ancho que el ☰, para centrar el título.
+                Color.clear.frame(width: 44, height: 44)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
