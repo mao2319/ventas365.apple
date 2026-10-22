@@ -177,6 +177,8 @@ struct PurchaseDelivery: Decodable, Hashable {
     var courierMessages: Int? = nil
     /// Código que el cliente le dicta al domiciliario al recibir (solo en camino).
     var deliveryCode: String? = nil
+    /// La lleva un domiciliario del Market (no uno de la tienda).
+    var marketCourier: Bool? = nil
 }
 
 /// Cancelación que pidió el cliente (ver `market-order-cancellations`).
@@ -253,7 +255,8 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
         if kind == "venta" {
             return delivery?.status == "entregado" ? .delivered : .completed
         }
-        if courier != nil { return .onTheWay }
+        // Que un domiciliario tome el pedido no lo pone en camino: la tienda lo
+        // sigue preparando y él va a recogerlo (ver `courierHeadingToStore`).
         if readyAt != nil { return .ready }
         if preparingAt != nil { return .preparing }
         if acceptedAt != nil { return .accepted }

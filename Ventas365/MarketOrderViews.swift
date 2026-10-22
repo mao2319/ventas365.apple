@@ -95,9 +95,20 @@ struct OrderText {
         }
     }
 
+    /// El domiciliario va a la tienda a recoger el pedido.
+    func courierHeading(_ name: String?) -> String {
+        if let name, !name.isEmpty {
+            return pick("\(name) va a la tienda a recoger tu pedido", "\(name) is heading to the store to pick up your order")
+        }
+        return pick("Tu domiciliario va a la tienda a recoger tu pedido", "Your courier is heading to the store to pick up your order")
+    }
+
     /// Estado a mostrar en listas: la cancelación pendiente manda sobre la etapa.
     func status(_ purchase: CustomerPurchase) -> String {
         if purchase.cancellation?.isPending == true { return pick("Cancelación solicitada", "Cancellation requested") }
+        if purchase.courierHeadingToStore {
+            return stage(purchase.trackingStage) + " · " + pick("domiciliario va a la tienda", "courier heading to the store")
+        }
         return stage(purchase.trackingStage)
     }
 

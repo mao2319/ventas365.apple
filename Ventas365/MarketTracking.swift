@@ -57,11 +57,28 @@ extension CustomerPurchase {
             switch delivery?.status {
             case "entregado": return .delivered
             case "en_camino": return .onTheWay
-            case .some(let status) where status != "cancelado" && delivery?.pickedUpAt != nil && status != "entregado": return .onTheWay
+            case .some(let status) where status != "cancelado" && delivery?.pickedUpAt != nil: return .onTheWay
+            case "pendiente": return .accepted
+            case "en_preparacion": return .preparing
             default: return delivery == nil ? .completed : .ready
             }
         }
         return stage
+    }
+
+    /// Un domiciliario del Market tomó el pedido y va a la tienda a recogerlo:
+    /// el pedido aún no está en camino (la tienda lo prepara o ya lo tiene listo).
+    var courierHeadingToStore: Bool {
+        guard isActive, trackingStage != .onTheWay, trackingStage != .delivered else { return false }
+        if kind == "pedido" { return courier != nil }
+        guard let delivery else { return false }
+        return delivery.marketCourier == true && delivery.courierName != nil && delivery.pickedUpAt == nil
+    }
+
+    /// Nombre de pila del domiciliario que tomó el pedido.
+    var courierFirstName: String? {
+        let name = delivery?.courierName ?? courier?.name
+        return name?.split(separator: " ").first.map(String.init)
     }
 
     var steps: [Stage] {
@@ -109,7 +126,14 @@ struct PurchaseDetail: View {
                         DeliveryCodeCard(code: code, language: language)
                     }
                 }
-                Section(track.status) { timeline(text) }
+                Section(track.status) {
+                    timeline(text)
+                    if purchase.courierHeadingToStore {
+                        Label(text.courierHeading(purchase.courierFirstName), systemImage: "bicycle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.brandGreen)
+                    }
+                }
                 if let cancellation = purchase.cancellation {
                     Section { CancellationStatusView(cancellation: cancellation, language: language) }
                 }
