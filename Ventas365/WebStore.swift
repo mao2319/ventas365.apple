@@ -13,6 +13,9 @@ final class WebStore: NSObject, ObservableObject {
     @Published var isLoading = false
     /// La página principal no cargó (sin conexión, sitio caído).
     @Published var failed = false
+    /// Sección que pide el sitio (botones Market / Negocios / Domicilios del
+    /// pie): la app la abre de forma nativa (el Market es nativo).
+    @Published var requestedSection: AppSection?
     /// Idioma elegido: en el inicio de la app o en el encabezado del sitio.
     @Published private(set) var language = AppLanguage.stored()
 
@@ -176,7 +179,9 @@ final class WebStore: NSObject, ObservableObject {
         courierStop: function () { post({ action: 'courierStop' }); },
         keepAwake: function (on) { post({ action: 'keepAwake', on: !!on }); },
         vibrate: function (pattern) { post({ action: 'vibrate', pattern: String(pattern || '') }); },
-        notify: function (title, body) { post({ action: 'notify', title: String(title || ''), body: String(body || '') }); }
+        notify: function (title, body) { post({ action: 'notify', title: String(title || ''), body: String(body || '') }); },
+        // Market / Negocios / Domicilios: la app cambia de sección (el Market es nativo).
+        openSection: function (section) { post({ action: 'openSection', section: String(section || '') }); }
       };
     })();
     """
@@ -266,6 +271,10 @@ extension WebStore: WKScriptMessageHandler {
                 language: body["language"] as? String
             ) {
                 CourierShift.shared.start(shift)
+            }
+        case "openSection":
+            if let raw = body["section"] as? String, let section = AppSection(rawValue: raw) {
+                requestedSection = section
             }
         case "courierStop": CourierShift.shared.stop()
         case "keepAwake": CourierShift.shared.keepAwake(body["on"] as? Bool ?? false)

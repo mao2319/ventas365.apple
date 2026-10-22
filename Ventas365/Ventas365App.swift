@@ -42,6 +42,11 @@ struct RootView: View {
             try? await Task.sleep(nanoseconds: splashNanoseconds)
             withAnimation(.easeOut(duration: 0.25)) { showSplash = false }
         }
+        .onReceive(web.$requestedSection) { requested in
+            guard let requested else { return }
+            section = requested
+            web.requestedSection = nil
+        }
         .onReceive(courier.$requestedSection) { requested in
             guard let requested else { return }
             section = requested
