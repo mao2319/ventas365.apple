@@ -235,6 +235,15 @@ struct CustomerPurchase: Decodable, Identifiable, Hashable {
         return status != "entregado" && status != "cancelado"
     }
 
+    /// Entregado por un domiciliario y aún sin calificar (hasta 3 días después):
+    /// sigue en "Órdenes en progreso" para que el cliente califique el servicio.
+    var awaitsRating: Bool {
+        guard kind == "venta", let delivery, delivery.status == "entregado", delivery.rating == nil,
+              delivery.courierName != nil else { return false }
+        guard let iso = delivery.deliveredAt, let date = OrderDate.parse(iso) else { return true }
+        return Date().timeIntervalSince(date) < 3 * 24 * 60 * 60
+    }
+
     enum Stage { case sent, accepted, preparing, ready, onTheWay, delivered, completed, cancelled }
 
     var stage: Stage {
@@ -296,6 +305,10 @@ enum OrderDate {
     }
 
     /// Hora del mensaje del chat; con la fecha si ya pasó más de un día.
+    static func parse(_ iso: String) -> Date? {
+        parser.date(from: iso) ?? plainParser.date(from: iso)
+    }
+
     static func chatStamp(_ iso: String, language: AppLanguage) -> String {
         guard let date = parser.date(from: iso) ?? plainParser.date(from: iso) else { return "" }
         let formatter = DateFormatter()

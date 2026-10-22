@@ -524,7 +524,7 @@ struct ActiveOrdersRail: View {
     @ObservedObject private var chatSeen = ChatSeen.shared
 
     private var active: [CustomerPurchase] {
-        if case .loaded(let list) = model.state { return list.filter(\.isActive) }
+        if case .loaded(let list) = model.state { return list.filter { $0.isActive || $0.awaitsRating } }
         return []
     }
 
@@ -549,6 +549,11 @@ struct ActiveOrdersRail: View {
                                     Text(text.status(purchase))
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(text.statusColor(purchase))
+                                    if purchase.awaitsRating {
+                                        Label(language == .es ? "Califica al domiciliario" : "Rate your courier", systemImage: "star.fill")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(.brandOrange)
+                                    }
                                 }
                                 Spacer()
                                 UnreadBadge(count: chatSeen.unread(purchase))
