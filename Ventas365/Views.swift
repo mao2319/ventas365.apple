@@ -171,7 +171,7 @@ struct WebScreen: View {
     var body: some View {
         let strings = web.language.strings
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 barButton("chevron.left", label: strings.back) { if !web.goBack() { onExit() } }
                 Menu {
                     Button { onExit() } label: { Label(strings.appHome, systemImage: "house") }
@@ -181,10 +181,12 @@ struct WebScreen: View {
                         }
                     }
                 } label: {
+                    // Mismo botón ☰ del Market: círculo de cristal.
                     Image(systemName: "line.3.horizontal")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.brandViolet)
+                        .foregroundColor(accent)
                         .frame(width: 44, height: 44)
+                        .modifier(GlassCircle())
                 }
                 .accessibilityLabel(strings.appHome)
                 Spacer()
@@ -193,11 +195,12 @@ struct WebScreen: View {
                     .foregroundColor(.ink)
                 Spacer()
                 // Mismo ancho que los dos botones de la izquierda, para centrar el título.
-                Color.clear.frame(width: 44, height: 44)
+                Color.clear.frame(width: 52, height: 44)
                 barButton("arrow.clockwise", label: strings.reload) { web.reload() }
             }
-            .padding(.horizontal, 6)
-            .background(Color.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.paper)
             .overlay(alignment: .bottom) {
                 if web.isLoading && !web.failed {
                     ProgressView()
@@ -228,10 +231,35 @@ struct WebScreen: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.brandViolet)
+                .foregroundColor(accent)
                 .frame(width: 44, height: 44)
+                .modifier(GlassCircle())
         }
         .accessibilityLabel(label)
+    }
+
+    /// Color de la sección, como en el inicio de la app.
+    private var accent: Color {
+        switch section {
+        case .market: return .brandOrange
+        case .negocios: return .brandViolet
+        case .domicilios: return .brandGreen
+        }
+    }
+}
+
+/// Botón redondo de cristal (Liquid Glass en iOS 26; blanco con borde antes),
+/// igual al ☰ del Market nativo.
+struct GlassCircle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            content
+                .background(Circle().fill(Color.white))
+                .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1))
+                .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        }
     }
 }
 
