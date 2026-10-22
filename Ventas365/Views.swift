@@ -208,7 +208,8 @@ struct WebScreen: View {
                         .tint(.brandViolet)
                         .frame(height: 2)
                 } else {
-                    Color.black.opacity(0.08).frame(height: 1)
+                    // Sin línea divisoria, como el encabezado del Market.
+                    Color.clear.frame(height: 1)
                 }
             }
 

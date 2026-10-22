@@ -157,6 +157,9 @@ struct PurchaseDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await refresh() }
         .task { await autoRefresh() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await refresh() }
+        }
         .sheet(isPresented: $showChat) {
             if let id = purchase.delivery?.id { DeliveryChatSheet(deliveryId: id, language: language) }
         }
@@ -289,7 +292,7 @@ struct PurchaseDetail: View {
 
     private func autoRefresh() async {
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
             if Task.isCancelled { break }
             if purchase.isActive { await refresh() }
         }

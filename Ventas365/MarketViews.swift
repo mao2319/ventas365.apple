@@ -134,6 +134,10 @@ struct MarketScreen: View {
         .tint(.brandOrange)
         .task { await model.load() }
         // Pedidos en curso: al entrar, al cambiar de cuenta y al volver a Inicio.
+        // Al volver a la app, los estados de "Órdenes en progreso" se ponen al día de una vez.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await orders.load(token: session.token) }
+        }
         .task(id: "\(session.customer?.id ?? "")-\(nav.tab == .home)") {
             if nav.tab == .home { await orders.keepFresh(token: session.token) } else { await orders.load(token: session.token) }
         }

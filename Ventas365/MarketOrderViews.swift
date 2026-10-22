@@ -710,14 +710,14 @@ final class MyOrdersModel: ObservableObject {
         }
     }
 
-    /// Recarga cada 30 s mientras la vista que la llama siga en pantalla:
+    /// Recarga cada 15 s mientras la vista que la llama siga en pantalla:
     /// así "Órdenes en progreso" cambia de estado y llegan los avisos de
     /// cancelación sin que el cliente tenga que actualizar.
     func keepFresh(token: String?) async {
         await load(token: token)
         guard token != nil else { return }
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
             if Task.isCancelled { break }
             await load(token: token)
         }
@@ -753,7 +753,11 @@ struct MyOrdersScreen: View {
         .background(Color.paper.ignoresSafeArea())
         .navigationTitle(text.myOrders)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await model.load(token: session.token) }
+        // Los estados se actualizan solos mientras la lista está abierta.
+        .task { await model.keepFresh(token: session.token) }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await model.load(token: session.token) }
+        }
     }
 
     private func list(_ purchases: [CustomerPurchase], _ text: OrderText) -> some View {
