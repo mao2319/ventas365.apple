@@ -479,7 +479,8 @@ enum ClaimNotifier {
             content.userInfo = ["section": AppSection.market.rawValue]
             // "cancel-" para que el aviso se vea también con la app abierta (ver CourierShift).
             UNUserNotificationCenter.current().add(
-                UNNotificationRequest(identifier: "cancel-claim-\(claim.id)-\(claim.round)", content: content, trigger: nil)
+                UNNotificationRequest(identifier: "cancel-claim-\(claim.id)-\(claim.round)", content: content, trigger: nil),
+                withCompletionHandler: nil
             )
         }
     }
