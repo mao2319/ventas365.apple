@@ -526,11 +526,30 @@ struct DeliveryCodeCard: View {
                 .textSelection(.enabled)
                 .accessibilityLabel(code.map(String.init).joined(separator: " "))
             Text(language == .es
-                 ? "Díctaselo al domiciliario cuando recibas tu pedido. No lo compartas antes."
-                 : "Tell it to the courier when you receive your order. Don't share it before.")
+                 ? "Díctaselo al domiciliario cuando recibas tu pedido."
+                 : "Tell it to the courier when you receive your order.")
                 .font(.system(size: 13))
                 .foregroundColor(.inkMuted)
                 .multilineTextAlignment(.center)
+            // Aviso de seguridad: con el código el domiciliario cierra la
+            // entrega, así que no se entrega antes de tener el producto.
+            Label {
+                Text(language == .es
+                     ? "Por tu seguridad, no entregues este código hasta tener el producto en tus manos."
+                     : "For your safety, don't give this code until you have the product in your hands.")
+                    .font(.system(size: 13, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.shield.fill")
+            }
+            .foregroundColor(Color(red: 0.55, green: 0.29, blue: 0.0))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(red: 1.0, green: 0.95, blue: 0.86))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)

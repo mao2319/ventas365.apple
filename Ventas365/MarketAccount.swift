@@ -553,6 +553,11 @@ struct ActiveOrdersRail: View {
                                         Label((language == .es ? "Código de entrega: " : "Delivery code: ") + code, systemImage: "key.fill")
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundColor(.ink)
+                                        Text(language == .es
+                                             ? "No lo entregues hasta recibir tu producto."
+                                             : "Don't give it until you receive your product.")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.inkMuted)
                                     }
                                     if purchase.awaitsRating {
                                         Label(language == .es ? "Califica al domiciliario" : "Rate your courier", systemImage: "star.fill")
