@@ -46,7 +46,7 @@ private struct StepState: Identifiable {
     var id: Int { stage.hashValue }
 }
 
-private extension CustomerPurchase {
+extension CustomerPurchase {
     /// Pedido de domicilio (lo sabe el pedido, o ya tiene entrega).
     var isDelivery: Bool { orderType == "domicilio" || delivery != nil || courier != nil }
 

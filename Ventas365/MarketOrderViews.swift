@@ -98,7 +98,7 @@ struct OrderText {
     /// Estado a mostrar en listas: la cancelación pendiente manda sobre la etapa.
     func status(_ purchase: CustomerPurchase) -> String {
         if purchase.cancellation?.isPending == true { return pick("Cancelación solicitada", "Cancellation requested") }
-        return stage(purchase.stage)
+        return stage(purchase.trackingStage)
     }
 
     func statusColor(_ purchase: CustomerPurchase) -> Color {
