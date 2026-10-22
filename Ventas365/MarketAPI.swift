@@ -718,4 +718,43 @@ enum MarketAPI {
         guard let decoded = try? decoder.decode(SimpleResponse.self, from: data) else { throw APIError.badResponse }
         return decoded
     }
+
+    /// Archivo de un envío multipart (foto o PDF).
+    struct UploadFile {
+        let filename: String
+        let contentType: String
+        let data: Data
+    }
+
+    /// Llama a una función con multipart/form-data (campos + archivos con el
+    /// mismo nombre de campo) y decodifica la respuesta JSON.
+    static func invokeMultipart<Response: Decodable>(
+        _ function: String,
+        fields: [(String, String)],
+        files: [UploadFile],
+        fileField: String = "files"
+    ) async throws -> Response {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        for (name, value) in fields {
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        }
+        for file in files {
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType)\r\n\r\n".utf8))
+            body.append(file.data)
+            body.append(Data("\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/\(function)"))
+        request.httpMethod = "POST"
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(publishableKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 90
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let decoded = try? decoder.decode(Response.self, from: data) else { throw APIError.badResponse }
+        return decoded
+    }
 }

@@ -132,6 +132,8 @@ struct PurchaseDetail: View {
             actions(track)
             rating(track)
             cancelSection()
+            // Reclamo de un pedido ya recibido (con evidencias).
+            ClaimSection(purchase: purchase, language: language)
             Section(text.products) {
                 ForEach(purchase.items, id: \.self) { item in
                     HStack {

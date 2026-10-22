@@ -703,6 +703,7 @@ final class MyOrdersModel: ObservableObject {
             let list = try await MarketAPI.purchases(token: token)
             state = .loaded(list)
             CancellationNotifier.check(list, token: token, language: AppLanguage.stored())
+            await ClaimNotifier.refresh(token: token, language: AppLanguage.stored())
         } catch {
             if case .loaded = state { return } // Un fallo al recargar no borra lo que ya se ve.
             state = .failed
