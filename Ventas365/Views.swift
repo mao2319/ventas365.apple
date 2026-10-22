@@ -165,13 +165,28 @@ struct WebScreen: View {
     /// Si se indica, abre esa página del sitio en lugar de la sección.
     var path: String?
     let onExit: () -> Void
+    /// Menú ☰: inicio de la app y las otras secciones (Market, Negocios, Domicilios).
+    var onNavigate: ((AppSection?) -> Void)? = nil
 
     var body: some View {
         let strings = web.language.strings
         VStack(spacing: 0) {
             HStack(spacing: 4) {
                 barButton("chevron.left", label: strings.back) { if !web.goBack() { onExit() } }
-                barButton("house", label: strings.appHome, action: onExit)
+                Menu {
+                    Button { onExit() } label: { Label(strings.appHome, systemImage: "house") }
+                    ForEach([AppSection.market, .negocios, .domicilios].filter { $0 != section }, id: \.self) { other in
+                        Button { onNavigate?(other) ?? onExit() } label: {
+                            Label(other.title(strings), systemImage: other == .market ? "bag" : other == .negocios ? "briefcase" : "bicycle")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.brandViolet)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(strings.appHome)
                 Spacer()
                 Text(section.title(strings))
                     .font(.system(size: 16, weight: .bold))
@@ -205,6 +220,8 @@ struct WebScreen: View {
         .onAppear {
             if let path { web.openPath(path) } else { web.open(section) }
         }
+        // Cambio de sección desde el menú ☰ (la misma pantalla sigue en uso).
+        .onChange(of: section) { web.open($0) }
     }
 
     private func barButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {

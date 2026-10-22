@@ -30,7 +30,7 @@ struct RootView: View {
                 // Market nativo: el pedido se genera en la app, sin pasar por el sitio.
                 MarketHub(language: web.language, onNavigate: { section = $0 })
             } else if let section {
-                WebScreen(web: web, section: section, onExit: { self.section = nil })
+                WebScreen(web: web, section: section, onExit: { self.section = nil }, onNavigate: { self.section = $0 })
             } else {
                 HomeView(language: web.language, onLanguage: web.select, onOpen: { section = $0 })
             }

@@ -112,7 +112,7 @@ struct MarketScreen: View {
                             Button { onNavigate(nil) } label: { Label(text.appHome, systemImage: "house") }
                             Button { onNavigate(.negocios) } label: { Label(language == .es ? "Negocios" : "Business", systemImage: "briefcase") }
                             Button { onNavigate(.domicilios) } label: { Label(language == .es ? "Domicilios" : "Deliveries", systemImage: "bicycle") }
-                        } label: { Image(systemName: "house") }
+                        } label: { Image(systemName: "line.3.horizontal") }
                         .accessibilityLabel(text.appHome)
                     }
                 }
